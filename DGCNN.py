@@ -1,6 +1,6 @@
 import torch
 from torch_geometric.nn import max_pool_x
-from torch_geometric import knn
+from torch_geometric.nn import knn
 import torch.nn as nn
 
 class EdgeConv(nn.Module):
@@ -11,7 +11,7 @@ class EdgeConv(nn.Module):
             )
     
     def forward(self, batch):
-        assign_index = knn(x = batch.pos, y = batch.pos, k = 20, batch_x = batch.batch,
+        assign_index = knn(x = batch[:, -1], y = batch[:, -1], k = 20, batch_x = batch.batch ,
                            batch_y = batch.batch)
         p = batch.pos[assign_index[1, :], :]
         q = batch.pos[assign_index[0, :], :]
