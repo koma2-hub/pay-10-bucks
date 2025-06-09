@@ -1,4 +1,5 @@
 import numpy as np 
+from utils.data_utils import load_ply2
 
-test_matrix1 = np.zeros((7, 7))
-print(test_matrix1)
+src = load_ply2("./data/robot_record0.ply")
+print(src)
