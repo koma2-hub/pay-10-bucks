@@ -10,12 +10,11 @@ class EdgeConv(nn.Module):
             nn.Linear(6, 64), nn.BatchNorm1d(64), nn.LeakyReLU(negative_slope = 0.2)
             )
     
-    def forward(self, batch):
-        assign_index = knn(x = batch[:, -1], y = batch[:, -1], k = 20, batch_x = batch.batch ,
-                           batch_y = batch.batch)
-        p = batch.pos[assign_index[1, :], :]
-        q = batch.pos[assign_index[0, :], :]
-        x = torch.cat([p, q-p], dim=1)
+    def forward(self, pcd):
+        assign_index = knn(x = pcd[:, :3], y = pcd[:, :3], k = 20)
+        p = assign_index[1, :]  #着目点
+        q = assign_index[0, :]  #近傍点
+        x = torch.cat([pcd[p], q-p], dim=1)
         x = self.shared_mlp(x)
 
         edge_batch = batch.batch[assign_index[1, :]]
