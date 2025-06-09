@@ -36,3 +36,20 @@ def load_ply(filename):
         print(f"予期せぬエラーが発生しました(load_ply): {e}")
         return None
     
+
+def l2_norm(a, b):
+    return ((a - b) ** 2).sum(axis =1)
+
+def farthest_point_sampling(pcd, k, metrics = l2_norm):
+    indices = np.zeros(k, dtype=np.int32)
+    distances = np.zeros((k, pcd.shape[0]), dtype=np.float32)
+    indices[0] = np.random.randint(len(pcd))
+    farthest_point = pcd[indices[0]]
+    min_distances = metrics(farthest_point, pcd)
+    distances[0, :] = min_distances
+    for i in range(1,k):
+        indices[i] = np.argmax(min_distances)
+        farthest_point = pcd[indices[i]]
+        distances[i, :] = metrics(farthest_point, pcd)
+        min_distances = np.minimum(min_distances, distances[i, :])
+    return indices
