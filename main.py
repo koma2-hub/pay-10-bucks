@@ -1,77 +1,183 @@
-import sys, os
-sys.path.append(os.pardir)
+# main.py
+import os
 import torch
 import torch.nn as nn
-from torch_geometric.loader import DataLoader
-from torch_geometric.data import Data, Batch # DataとBatchクラスをインポート
+import torch.nn.functional as F
+from torch.utils.data import DataLoader as TorchDataLoader # 標準DataLoader
+from torch_geometric.data import Data, Batch # PyGのData, Batchクラス
+from torch_geometric.loader import DataLoader as GeometricDataLoader # PyGのDataLoader
 
-# DGCNNFeatureExtractor モデルの定義 (以前の修正版を使用)
-# get_graph_feature, knn_coords, knn_features, get_graph_feature_generic も同じファイルにあると仮定
-from utils.model import DGCNNLocalFeatureExtractor, get_graph_feature, knn_coords, knn_features, get_graph_feature_generic
-
-# MultiPointCloudDataset の定義 (提供いただいたものを使用)
-from utils.PCLDataset import MultiPointCloudDataset, load_ply, farthest_point_sampling
+# モデルとデータセットのインポート
+from model import DGCNNLocalFeatureExtractor, get_graph_feature, knn_coords, knn_features, get_graph_feature_generic
+from dataset import ContrastivePointCloudDataset, load_ply, farthest_point_sampling, sample_patch_from_point_cloud, random_transform
 
 
-# ----------------------------------------------------------------------
-# 以下は main.py の主要部分の修正例
-# ----------------------------------------------------------------------
+# --- ハイパーパラメータ設定 ---
+NUM_POINTS_PER_PATCH = 1024 # 各パッチの点数
+PATCH_RADIUS = 0.5 # パッチサンプリングの半径 (調整してください)
+BATCH_SIZE = 32 # コントラスティブ学習のバッチサイズ (大きいほど良い)
+EMB_DIMS = 1024 # DGCNNの埋め込み次元
+PROJECTION_DIM = 128 # プロジェクションヘッドの出力次元
+K_NEIGHBORS = 20 # DGCNNのK (K-NNグラフ構築)
+
+LEARNING_RATE = 0.001
+WEIGHT_DECAY = 1e-4
+NUM_EPOCHS = 100
+TEMPERATURE = 0.07 # InfoNCE Lossの温度パラメータ
+
+MODEL_SAVE_PATH = "dgcnn_local_feature_extractor_contrastive.pth"
+DATA_ROOT_DIR = './data' # PLYファイルがあるdata/raw/の親ディレクトリ
+
+
+def train_contrastive(model, dataloader, optimizer, device, temperature):
+    model.train()
+    total_loss = 0
+    for batch_idx, (patch_A, patch_B) in enumerate(dataloader):
+        # patch_A, patch_B は (B, N, C) のテンソル
+        patch_A = patch_A.to(device)
+        patch_B = patch_B.to(device)
+
+        optimizer.zero_grad()
+
+        # モデルからプロジェクションされた特徴量を取得 (訓練モードなのでprojected_featuresが返る)
+        features_A = model(patch_A) # (B, N, projection_dim)
+        features_B = model(patch_B) # (B, N, projection_dim)
+
+        # パッチ全体の平均特徴量を取得 (簡易的なグローバル特徴量として扱う)
+        # コントラスティブ学習では、パッチ内の全点から特徴を統合したり、
+        # あるいはキーポイント検出をしてその特徴を使うことが多いですが、
+        # ここではシンプルに平均特徴量を使用。
+        features_A_global = features_A.mean(dim=1) # (B, projection_dim)
+        features_B_global = features_B.mean(dim=1) # (B, projection_dim)
+        
+        # L2正規化
+        features_A_global = F.normalize(features_A_global, p=2, dim=1)
+        features_B_global = F.normalize(features_B_global, p=2, dim=1)
+
+        # --- InfoNCE Loss の計算 ---
+        # Positives: B_i に対する A_i
+        l_pos = torch.einsum('bd,bd->b', features_A_global, features_B_global).unsqueeze(-1) # (B, 1)
+
+        # Negatives: B_j (j != i) に対する A_i
+        # einsum('bd,kd->bk') は A_i と B_k の全ての組み合わせの内積を計算
+        l_neg = torch.einsum('bd,kd->bk', features_A_global, features_B_global) # (B, B)
+        
+        # logits の構成: [ポジティブの内積, ネガティブの内積 (バッチ内の他のサンプル)]
+        # B_i と B_i の内積 (l_pos) は l_neg の対角成分なので、l_neg から対角成分を取り除く
+        # もしくは、logits にl_posを直接結合し、ターゲットラベルでポジティブ位置を指定する
+        
+        # SimCLRスタイルのlogits構築 (対角成分がポジティブ)
+        # logits = torch.matmul(features_A_global, features_B_global.T) / temperature # (B, B)
+        # labels = torch.arange(BATCH_SIZE, dtype=torch.long, device=device) # 対角成分が正解
+
+        # より一般的なInfoNCE (Positivesが最初に結合される形式)
+        logits = torch.cat([l_pos, l_neg.fill_diagonal_(float('-inf'))], dim=1) # fill_diagonal_で対角成分をinfにして無視
+        labels = torch.zeros(logits.shape[0], dtype=torch.long, device=device) # ポジティブは常に0番目のインデックス
+
+        loss = F.cross_entropy(logits / temperature, labels)
+
+        loss.backward()
+        optimizer.step()
+        
+        total_loss += loss.item()
+
+        if (batch_idx + 1) % 10 == 0:
+            print(f"  Batch {batch_idx+1}/{len(dataloader)}, Loss: {loss.item():.4f}")
+
+    avg_loss = total_loss / len(dataloader)
+    return avg_loss
+
+def extract_features(model, dataloader, device):
+    model.eval() # 推論モードに設定 (local_featuresが返る)
+    all_features = []
+    with torch.no_grad():
+        for batch_idx, (patch_A, patch_B) in enumerate(dataloader): # このdataloaderはコントラスティブ学習用だが、特徴抽出には片方で十分
+            # 訓練済みモデルにデータを渡す (local_featuresを取得)
+            # patch_A のみを使い、形状を (B, N, C) から (B, C, N) へ
+            patch_A = patch_A.to(device)
+            
+            # モデルのforwardは (B, N, emb_dims) を返す
+            features = model(patch_A) 
+            
+            all_features.append(features.cpu())
+    
+    return torch.cat(all_features, dim=0)
+
 
 if __name__ == '__main__':
-    # データセットの準備 (例: データファイルが 'data/raw' ディレクトリにある場合)
-    # dataset_root はご自身の環境に合わせて設定してください
-    dataset_root = '/mnt/c/Users/matsu/SICK/pay-10-bucks/dataset/' 
-    num_points = 1024 # 各点群の点数
-    batch_size = 10 # バッチサイズ (1より大きい値でテスト推奨)
-
-    dataset = MultiPointCloudDataset(root='/mnt/c/Users/matsu/SICK/pay-10-bucks/dataset/robot_record_dataset/', num_points=1024)
-    # DataLoader の batch_size を適切に設定してください
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
-    # モデルのインスタンス化
-    model = DGCNNLocalFeatureExtractor(k=20, emb_dims=1024) 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = model.to(device)
-
-    # 特徴量抽出の実行 (例)
-    model.eval() # 推論モードに設定
-    all_features = []
-
     print(f"Using device: {device}")
-    print(f"Number of batches: {len(dataloader)}")
 
-    with torch.no_grad(): # 勾配計算を無効化
-        for batch_idx, data_batch in enumerate(dataloader):
-            print(f"\nProcessing batch {batch_idx+1}/{len(dataloader)}")
-            print(f"Type of data_batch: {type(data_batch)}") # デバッグ用
-            #print(data_batch) # デバッグ用: data_batch の内容を確認
+    # 1. モデルのインスタンス化 (学習用)
+    model = DGCNNLocalFeatureExtractor(k=K_NEIGHBORS, emb_dims=EMB_DIMS, projection_dim=PROJECTION_DIM).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
-            if isinstance(data_batch, Data):
-                # DataLoaderのbatch_size=1の場合など、Dataオブジェクトが直接返される
-                # (1, N, C) の形状にするためにunsqueeze(0)を追加
-                x_input = data_batch.x.unsqueeze(0) # (1, num_points, 4)
-                # マスクも手動で作成（全点が有効と仮定）
-                mask = torch.ones(x_input.shape[0], x_input.shape[1], dtype=torch.bool, device=device)
-                print(f"  Input treated as single Data object. Shape: {x_input.shape}")
-            elif isinstance(data_batch, Batch):
-                # DataLoaderがBatchオブジェクトを返す場合
-                # x_dense: (B, N_padded, C)
-                # mask: (B, N_padded)
-                x_input, mask = data_batch.to_dense_batch()
-                print(f"  Input treated as Batch object. Dense shape: {x_input.shape}")
-            else:
-                raise TypeError(f"Unexpected type for data_batch: {type(data_batch)}")
+    # 2. データセットとデータローダーの準備 (コントラスティブ学習用)
+    # data/raw ディレクトリにPLYファイルがあることを確認してください
+    if not os.path.exists(os.path.join(DATA_ROOT_DIR, 'raw')):
+        print(f"Error: Directory '{os.path.join(DATA_ROOT_DIR, 'raw')}' not found.")
+        print("Please place your .ply files in data/raw/ and ensure the path is correct.")
+        exit()
 
-            # テンソルをデバイスに移動
-            x_input = x_input.to(device)
+    contrastive_dataset = ContrastivePointCloudDataset(
+        root_dir=DATA_ROOT_DIR, 
+        num_points_per_patch=NUM_POINTS_PER_PATCH, 
+        patch_radius=PATCH_RADIUS
+    )
+    # 標準のDataLoaderを使用 (torch_geometric.data.DataLoaderではない)
+    # Datasetがtorch_geometric.data.Dataを返さないため
+    contrastive_dataloader = TorchDataLoader(
+        contrastive_dataset, 
+        batch_size=BATCH_SIZE, 
+        shuffle=True, 
+        num_workers=4,
+        drop_last=True # InfoNCE Lossの計算で対角要素を扱うため、ドロップラストを有効にする
+    )
 
-            # モデルにデータを渡す
-            features = model(x_input) 
-            
-            print(f"  Extracted features shape for this batch: {features.shape}")
-            all_features.append(features.cpu())
+    print(f"Number of batches for training: {len(contrastive_dataloader)}")
 
-    extracted_features = torch.cat(all_features, dim=0)
-    print(f"\nTotal extracted features shape: {extracted_features.shape}")
+    # 3. モデルの学習ループ
+    print("\n--- Starting Contrastive Learning Training ---")
+    best_loss = float('inf')
+    for epoch in range(NUM_EPOCHS):
+        avg_loss = train_contrastive(model, contrastive_dataloader, optimizer, device, TEMPERATURE)
+        print(f"Epoch {epoch+1}/{NUM_EPOCHS}, Average Loss: {avg_loss:.4f}")
 
+        # モデルの保存 (最も良い損失のモデルを保存)
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+            torch.save(model.state_dict(), MODEL_SAVE_PATH)
+            print(f"Model saved to {MODEL_SAVE_PATH} (Loss: {best_loss:.4f})")
+
+    print("\n--- Contrastive Learning Training Complete ---")
+
+    # 4. 学習済みモデルのロードと特徴量抽出
+    print("\n--- Loading Trained Model for Feature Extraction ---")
+    # 特徴量抽出時はプロジェクションヘッドを通さない方の出力 (emb_dims次元) を利用
+    feature_extractor_model = DGCNNLocalFeatureExtractor(k=K_NEIGHBORS, emb_dims=EMB_DIMS, projection_dim=PROJECTION_DIM)
+    
+    # state_dictをロードする前に、モデルがデバイスに移動されていることを確認
+    feature_extractor_model.load_state_dict(torch.load(MODEL_SAVE_PATH, map_location=device))
+    feature_extractor_model.to(device)
+    print("Model loaded successfully.")
+
+    print("\n--- Starting Feature Extraction ---")
+    # 特徴量抽出用のDataLoaderは、学習時と同じく ContrastivePointCloudDataset を利用
+    # ただし、バッチサイズは任意で調整可能
+    feature_extraction_dataloader = TorchDataLoader(
+        contrastive_dataset, # ここでは同じデータセットを使うが、必要なら別途定義
+        batch_size=BATCH_SIZE, 
+        shuffle=False, # 特徴抽出時はシャッフル不要
+        num_workers=4
+    )
+    
+    extracted_features = extract_features(feature_extractor_model, feature_extraction_dataloader, device)
+    
+    print(f"Total extracted features shape: {extracted_features.shape}")
     print("\nFeature extraction complete.")
+
+    # 抽出された特徴量の利用例
+    # extracted_features の形状は (Total_Patches, emb_dims)
+    # これらをRANSAC/ICPの前の特徴量マッチングに利用できます。
+    # 例: extracted_features[0] は最初のパッチの特徴量
+    #     extracted_features[BATCH_SIZE] は次のパッチの特徴量 など
