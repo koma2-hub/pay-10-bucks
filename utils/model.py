@@ -94,78 +94,103 @@ def knn_features(x, k):
     idx = pairwise_distance.topk(k=k, dim=-1, largest=False)[1]   # (batch_size, num_points, k)
     return idx
 
-
-# --- DGCNNモデルクラス (修正版) ---
-class DGCNNFeatureExtractor(nn.Module): # クラス名を変更して意図を明確にする
-    def __init__(self, k=20, emb_dims=1024): # num_classes を削除
-        super(DGCNNFeatureExtractor, self).__init__()
+class DGCNNLocalFeatureExtractor(nn.Module):
+    def __init__(self, k=20, emb_dims=1024, projection_dim=128): # projection_dim を追加
+        super(DGCNNLocalFeatureExtractor, self).__init__()
         self.k = k
         self.emb_dims = emb_dims
+        self.projection_dim = projection_dim # プロジェクション次元を保存
 
-        # 最初のEdgeConv層 (変更なし)
+        # 既存のDGCNNの層 (変更なし)
         self.conv1 = nn.Sequential(nn.Conv2d(8, 64, kernel_size=(1, 1), bias=False),
                                    nn.BatchNorm2d(64),
                                    nn.LeakyReLU(negative_slope=0.2))
 
-        # 2番目のEdgeConv層 (変更なし)
         self.conv2 = nn.Sequential(nn.Conv2d(128, 64, kernel_size=(1, 1), bias=False),
                                    nn.BatchNorm2d(64),
                                    nn.LeakyReLU(negative_slope=0.2))
 
-        # 3番目のEdgeConv層 (変更なし)
         self.conv3 = nn.Sequential(nn.Conv2d(128, 128, kernel_size=(1, 1), bias=False),
                                    nn.BatchNorm2d(128),
                                    nn.LeakyReLU(negative_slope=0.2))
 
-        # 4番目の畳み込み層 (変更なし)
         self.conv4 = nn.Sequential(nn.Conv1d(256, self.emb_dims, kernel_size=1, bias=False),
                                    nn.BatchNorm1d(self.emb_dims),
                                    nn.LeakyReLU(negative_slope=0.2))
-        
-        # 最終の全結合層（分類ヘッド）は削除する
-        # self.linear1 = nn.Linear(self.emb_dims * 2, 512, bias=False)
-        # self.bn6 = nn.BatchNorm1d(512)
-        # self.dp1 = nn.Dropout(p=0.5)
-        # self.linear2 = nn.Linear(512, 256)
-        # self.bn7 = nn.BatchNorm1d(256)
-        # self.dp2 = nn.Dropout(p=0.5)
-        # self.linear3 = nn.Linear(256, num_classes)
+
+        # --- ここからプロジェクションヘッドの追記 ---
+        # ローカル特徴量 (emb_dims) を受け取り、projection_dim に射影するMLP
+        # 典型的には、バッチ正規化とReLUを挟んだ2層のMLPが使われます。
+        self.projection_head = nn.Sequential(
+            nn.Linear(self.emb_dims, self.emb_dims // 2, bias=False), # 1層目: 半分に次元削減
+            nn.BatchNorm1d(self.emb_dims // 2),
+            nn.ReLU(inplace=True),
+            nn.Linear(self.emb_dims // 2, self.projection_dim, bias=False) # 2層目: 最終プロジェクション次元へ
+            # 論文によっては、最後のLinear層の後に活性化関数やBNを含めないこともあります。
+            # 例: SimCLRでは最後のLinear層の後に活性化関数は適用しない。
+        )
+        # --- プロジェクションヘッドの追記終了 ---
 
     def forward(self, x):
-        # x: (B, N, 4) - to_dense_batch() からくる形式
+        # x: (B, N, 4) - 入力点群 (x, y, z, intensity)
         x = x.permute(0, 2, 1) # (B, 4, N)
-        
+
         batch_size = x.size(0)
-        
+
         # 1. 最初のEdgeConv層 (k-NNは座標のみ)
-        x = get_graph_feature(x, k=self.k) 
+        x_initial_features = x # (B, 4, N) 全特徴量を使用
+        
+        x = get_graph_feature(x_initial_features, k=self.k) # (B, 8, N, k)
         x = self.conv1(x) # (B, 64, N, k)
         x1 = x.max(dim=-1, keepdim=False)[0] # (B, 64, N)
-        
+
         # 2. 2番目のEdgeConv層 (k-NNは特徴量空間で)
-        x = get_graph_feature_generic(x1, k=self.k) 
+        x = get_graph_feature_generic(x1, k=self.k) # (B, 128, N, k)
         x = self.conv2(x) # (B, 64, N, k)
         x2 = x.max(dim=-1, keepdim=False)[0] # (B, 64, N)
 
         # 3. 3番目のEdgeConv層 (k-NNは特徴量空間で)
-        x = get_graph_feature_generic(x2, k=self.k) 
+        x = get_graph_feature_generic(x2, k=self.k) # (B, 128, N, k)
         x = self.conv3(x) # (B, 128, N, k)
-        x3 = x.max(dim=-1, keepdim=False)[0] # (B, 128, N)
+        x3 = x.max(dim=-1, keepim=False)[0] # (B, 128, N)
 
-        # 4. Global Feature (Concat of Max/Avg Pooling)
-        x = torch.cat((x1, x2, x3), dim=1) # (B, 256, N)
-        
-        x = self.conv4(x) # (B, emb_dims, N)
-        
-        # Global Max PoolingとGlobal Avg Pooling
-        x_max = F.adaptive_max_pool1d(x, 1).view(batch_size, -1) # (B, emb_dims)
-        x_avg = F.adaptive_avg_pool1d(x, 1).view(batch_size, -1) # (B, emb_dims)
-        
-        # 最終特徴量を結合
-        global_feature = torch.cat((x_max, x_avg), dim=1) # (B, emb_dims * 2)
+        # 4. Concatenate (点ごとの特徴量を結合)
+        local_features = torch.cat((x1, x2, x3), dim=1) # (B, 256, N)
 
-        # クラス分類の全結合層は削除し、global_feature を直接返す
-        return global_feature
+        local_features = self.conv4(local_features) # (B, emb_dims, N)
+
+        # --- ここからプロジェクションヘッドの適用 ---
+        # local_features の形状は (B, emb_dims, N)
+        # プロジェクションヘッドは nn.Linear を含むため、通常は (Batch_size, Features) 形式の入力を期待します。
+        # ここでは、各点の特徴量に対してプロジェクションを適用したいので、形状を (B*N, emb_dims) に変更します。
+        B, C_feats, N = local_features.shape # B: バッチサイズ, C_feats: emb_dims, N: 点数
+
+        # 形状を (B*N, emb_dims) に変更してプロジェクションヘッドに渡す
+        # ここで Batch Normalization が Batch*N の次元で機能することに注意
+        projected_features = self.projection_head(local_features.view(B * N, C_feats))
+
+        # 元の形状 (B, N, projection_dim) に戻す
+        projected_features = projected_features.view(B, N, self.projection_dim)
+        # --- プロジェクションヘッドの適用終了 ---
+
+        # 訓練時には、プロジェクションヘッドの出力をコントラスティブ損失の計算に用いる
+        # 推論（特徴量抽出）時には、プロジェクションヘッドを通さずにローカル特徴量（emb_dims）を返すか、
+        # プロジェクション後の特徴量（projection_dim）を返すか、タスクによる。
+        # 通常はエンコーダの出力（local_features）をダウンストリームタスクに使うため、
+        # 学習モード（model.train()）ではprojected_featuresを、
+        # 評価モード（model.eval()）ではlocal_featuresを返すようにすることもできます。
+        # あるいは、常にprojected_featuresを返し、必要に応じて後でemb_dimsの特徴を使う。
+
+        # コントラスティブ学習の損失計算のために、projected_featuresを返す
+        # 位置合わせのためのマッチングには、local_features (emb_dims次元) を使うことが多いです。
+        # どちらの出力を使うかは、学習タスクとダウンストリームタスクの目的に依存します。
+        
+        # 例: 学習時はprojected_featuresを返し、実際の使用時はlocal_featuresを返す場合
+        if self.training: # `self.training` はモデルが訓練モードか（model.train()が呼ばれているか）を示す
+            return projected_features # (B, N, projection_dim)
+        else:
+            return local_features # (B, N, emb_dims)
+
 
 # --- 汎用版 get_graph_feature_generic の定義 ---
 # (通常のDGCNNのget_graph_featureと同じだが、k-NNの入力をスライスしない)

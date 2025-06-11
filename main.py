@@ -1,3 +1,5 @@
+import sys, os
+sys.path.append(os.pardir)
 import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
@@ -5,7 +7,7 @@ from torch_geometric.data import Data, Batch # DataとBatchクラスをインポ
 
 # DGCNNFeatureExtractor モデルの定義 (以前の修正版を使用)
 # get_graph_feature, knn_coords, knn_features, get_graph_feature_generic も同じファイルにあると仮定
-from utils.model import DGCNNFeatureExtractor, get_graph_feature, knn_coords, knn_features, get_graph_feature_generic
+from utils.model import DGCNNLocalFeatureExtractor, get_graph_feature, knn_coords, knn_features, get_graph_feature_generic
 
 # MultiPointCloudDataset の定義 (提供いただいたものを使用)
 from utils.PCLDataset import MultiPointCloudDataset, load_ply, farthest_point_sampling
@@ -27,7 +29,7 @@ if __name__ == '__main__':
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # モデルのインスタンス化
-    model = DGCNNFeatureExtractor(k=20, emb_dims=1024) 
+    model = DGCNNLocalFeatureExtractor(k=20, emb_dims=1024) 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
 
