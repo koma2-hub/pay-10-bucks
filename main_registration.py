@@ -17,8 +17,8 @@ PROJECTION_DIM = 128 # 学習時のprojection_dimに合わせる (推論時は�
 K_NEIGHBORS = 20 # DGCNNのK (学習時と同じ値)
 NUM_POINTS_PER_PATCH = 2048
 # 位置合わせ対象の点群ファイルパス (実際のファイルパスに合わせてください)
-SOURCE_PLY_PATH = "./test_data/lab1.ply" # 例: ロボットの現在のスキャン
-TARGET_PLY_PATH = "./test_data/lab2.ply" # 例: ロボットの既知の地図、または以前のスキャン
+SOURCE_PLY_PATH = "./test_data/lab_room1.ply" # 例: ロボットの現在のスキャン
+TARGET_PLY_PATH = "./test_data/lab_room1.ply" # 例: ロボットの既知の地図、または以前のスキャン
 
 # --- 特徴量マッチングとRANSACのパラメータ ---
 FEATURE_MATCHING_THRESHOLD = 0.2 # 特徴量間の最大距離 (コサイン類似度なら0.8など)

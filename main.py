@@ -9,12 +9,12 @@ from torch_geometric.loader import DataLoader as GeometricDataLoader # PyGのDat
 
 # モデルとデータセットのインポート
 from model import DGCNNLocalFeatureExtractor, get_graph_feature, knn_coords, knn_features, get_graph_feature_generic
-from dataset import ContrastivePointCloudDataset, load_ply, farthest_point_sampling, sample_patch_from_point_cloud, random_transform
+from dataset_with_fps import ContrastivePointCloudDataset, load_ply, farthest_point_sampling, sample_patch_from_point_cloud, random_transform
 
 
 # --- ハイパーパラメータ設定 ---
-NUM_POINTS_PER_PATCH = 1024 # 各パッチの点数
-PATCH_RADIUS = 0.5 # パッチサンプリングの半径 (調整してください)
+NUM_POINTS_PER_PATCH = 256 # 各パッチの点数
+PATCH_RADIUS = None # パッチサンプリングの半径 (調整してください)
 BATCH_SIZE = 32 # コントラスティブ学習のバッチサイズ (大きいほど良い)
 EMB_DIMS = 1024 # DGCNNの埋め込み次元
 PROJECTION_DIM = 128 # プロジェクションヘッドの出力次元
@@ -26,7 +26,7 @@ NUM_EPOCHS = 100
 TEMPERATURE = 0.07 # InfoNCE Lossの温度パラメータ
 
 MODEL_SAVE_PATH = "dgcnn_local_feature_extractor_contrastive.pth"
-DATA_ROOT_DIR = './data' # PLYファイルがあるdata/raw/の親ディレクトリ
+DATA_ROOT_DIR = './dataset/robot_record_dataset/' # PLYファイルがあるdata/raw/の親ディレクトリ
 
 
 def train_contrastive(model, dataloader, optimizer, device, temperature):
