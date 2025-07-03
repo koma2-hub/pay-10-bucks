@@ -1,5 +1,6 @@
 # main.py
 import os
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -139,6 +140,7 @@ if __name__ == '__main__':
     # 3. モデルの学習ループ
     print("\n--- Starting Contrastive Learning Training ---")
     best_loss = float('inf')
+    start = time.time()
     for epoch in range(NUM_EPOCHS):
         avg_loss = train_contrastive(model, contrastive_dataloader, optimizer, device, TEMPERATURE)
         print(f"Epoch {epoch+1}/{NUM_EPOCHS}, Average Loss: {avg_loss:.4f}")
@@ -149,7 +151,9 @@ if __name__ == '__main__':
             torch.save(model.state_dict(), MODEL_SAVE_PATH)
             print(f"Model saved to {MODEL_SAVE_PATH} (Loss: {best_loss:.4f})")
 
+    learning_time = time.time() - start
     print("\n--- Contrastive Learning Training Complete ---")
+    print("Total Learning Time:", learning_time)
 
     # 4. 学習済みモデルのロードと特徴量抽出
     print("\n--- Loading Trained Model for Feature Extraction ---")
