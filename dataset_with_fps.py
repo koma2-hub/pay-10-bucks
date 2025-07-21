@@ -68,17 +68,18 @@ def downsample_pcd(pointcloud, downsample_point, intensity=False) -> np.ndarray:
 # --- パッチサンプリングとデータ拡張の補助関数 ---
 # dataset.py (sample_patch_from_point_cloud 関数内)
 
-def sample_patch_from_point_cloud(points_np, num_points_per_patch, patch_radius=None, k_neighbors=None):
+def sample_patch_from_point_cloud(points_np, num_points_per_patch, center_point = None, patch_radius=None, k_neighbors=None):
     """
     点群から中心点周辺のパッチをサンプリングする関数。
     points_np: (N, C) NumPy配列 (Nは点数、Cは特徴量次元)
     """
     if points_np.shape[0] == 0: # 空の点群の場合の追加ガード
         return np.zeros((num_points_per_patch, points_np.shape[1]), dtype=np.float32)
-
-    center_point_index = np.random.randint(len(points_np))
-    center = points_np[center_point_index, :3] # 座標のみで近傍探索
-
+    if center_point is None:
+        center_point_index = np.random.randint(len(points_np))
+        center = points_np[center_point_index, :3] # 座標のみで近傍探索
+    else:
+        center = center_point
     # --- 修正箇所 ---
     if patch_radius is not None: # ここを radius -> patch_radius
         # 半径内の点を抽出
@@ -101,7 +102,9 @@ def sample_patch_from_point_cloud(points_np, num_points_per_patch, patch_radius=
         indices = indices[0]
 
     patch_points = points_np[indices]
-    
+    idx_in_patch = np.random.randint(len(patch_points))
+    points_in_patch = patch_points[idx_in_patch, :3]
+
     # ... (以降のパディング・サブサンプリングロジックは変更なし) ...
     if len(patch_points) > num_points_per_patch:
         random_indices = np.random.choice(len(patch_points), num_points_per_patch, replace=False)
@@ -114,7 +117,7 @@ def sample_patch_from_point_cloud(points_np, num_points_per_patch, patch_radius=
     # パッチ内の点の中心を原点に移動
     patch_points[:, :3] -= np.mean(patch_points[:, :3], axis=0)
 
-    return patch_points
+    return patch_points, points_in_patch
 
 
 def random_transform(points_np, rotation_range=(-180, 180), translation_range=(-0.1, 0.1), noise_std=0.01, dropout_ratio=(0.0, 0.2)):
@@ -172,6 +175,7 @@ class ContrastivePointCloudDataset(torch.utils.data.Dataset):
         self.num_points_per_patch = num_points_per_patch
         self.patch_radius = patch_radius
         self.transform = transform # オプションでデータ拡張を適用
+        self.n_sample = n_sample
 
         # rawディレクトリ内のPLYファイルリストを取得
         self.file_list = [os.path.join(root_dir, 'raw', f) 
@@ -192,7 +196,7 @@ class ContrastivePointCloudDataset(torch.utils.data.Dataset):
         original_points = load_ply(file_path) # (N, 4) - xyz intensity
 
         #読み込んだ点群を1024 or 2048点までFPSでダウンサンプリングをする
-        original_points = downsample_pcd(original_points, 1024, intensity=True)
+        original_points = downsample_pcd(original_points, self.n_sample, intensity=True)
 
         # NumPy配列をfloat32にキャスト (モデルのRuntimeError対策)
         if original_points is not None:
@@ -207,14 +211,15 @@ class ContrastivePointCloudDataset(torch.utils.data.Dataset):
         # ランダムに中心点を選択しパッチをサンプリング
         # コントラスティブ学習では、同じ点群から異なるビューのパッチを生成することがポジティブペアの基本
         # ここでは、同じ点群から2つの独立したパッチをサンプリングします
-        patch_A_raw = sample_patch_from_point_cloud(
+        patch_A_raw , point_in_patch = sample_patch_from_point_cloud(
             original_points, 
             self.num_points_per_patch, 
             patch_radius=self.patch_radius
         )
-        patch_B_raw = sample_patch_from_point_cloud(
+        patch_B_raw, _ = sample_patch_from_point_cloud(
             original_points, 
             self.num_points_per_patch, 
+            center_point= point_in_patch,
             patch_radius=self.patch_radius 
         )
        

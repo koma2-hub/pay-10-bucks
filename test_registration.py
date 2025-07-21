@@ -11,7 +11,7 @@ from model import DGCNNLocalFeatureExtractor # DGCNNLocalFeatureExtractorのみ
 from dataset import load_ply, farthest_point_sampling # load_ply関数のみ
 
 # --- 設定 ---
-MODEL_PATH = "dgcnn_local_feature_extractor_contrastive_2.pth" # 学習済みモデルのパス
+MODEL_PATH = "dgcnn_local_feature_extractor_contrastive.pth" # 学習済みモデルのパス
 EMB_DIMS = 1024 # 学習時のemb_dimsに合わせる
 PROJECTION_DIM = 128 # 学習時のprojection_dimに合わせる (推論時は使わないがモデル定義に必要)
 K_NEIGHBORS = 20 # DGCNNのK (学習時と同じ値)
@@ -30,6 +30,25 @@ RANSAC_CONFIDENCE = 0.999 # RANSACの信頼度
 ICP_THRESHOLD = 0.02 # ICPの対応点探索距離 (RANSACより厳しくすることが多い)
 ICP_MAX_ITERATIONS = 200 # ICPの最大繰り返し回数
 
+def random_transform(points_np, rotation_range=(0, 30)):
+    """
+    点群にランダムなアフィン変換、ノイズ、ドロップアウトを適用する関数。
+    points_np: (N, C) NumPy配列 (Nは点数、Cは特徴量次元, C>=3)
+    """
+    transformed_points = points_np.copy()
+    
+    # 1. 回転 (Z軸回転が一般的ですが、XYZ軸回転も可)
+    angle_z = np.random.uniform(np.deg2rad(rotation_range[0]), np.deg2rad(rotation_range[1]))
+    cos_z = np.cos(angle_z)
+    sin_z = np.sin(angle_z)
+    rotation_matrix = np.array([
+        [cos_z, -sin_z, 0],
+        [sin_z, cos_z, 0],
+        [0, 0, 1]
+    ], dtype=np.float32)
+    # その他の軸回転も追加可能
+    transformed_points[:, :3] = transformed_points[:, :3] @ rotation_matrix.T
+    return transformed_points
 
 def load_model(model_path, emb_dims, projection_dim, k_neighbors, device):
     """学習済みモデルをロードする関数"""
@@ -69,40 +88,48 @@ def extract_features_from_pcd(model, pcd_np, num_points, device):
     # 形状を (N_fixed, emb_dims) に戻す
     return features.squeeze(0).cpu().numpy(), processed_pcd_np[:, :3] # 特徴量と(処理後の)座標
 
+# main_registration.py (または dataset.py の find_correspondences 関数)
+
 def find_correspondences(features1, points1, features2, points2, threshold):
     """
     特徴量間のNNマッチングを行い、対応点を見つける。
-    features1: (N1, D)
-    features2: (N2, D)
-    points1: (N1, 3)
-    points2: (N2, 3)
+    features1: (N1, D) - sourceのローカル特徴量
+    points1: (N1, 3) - sourceの座標
+    features2: (N2, D) - targetのローカル特徴量
+    points2: (N2, 3) - targetの座標
+    threshold: 特徴量間の最大距離閾値
+    
+    Returns:
+        source_corr_points: (M, 3) NumPy配列 - sourceの対応点の座標
+        target_corr_points: (M, 3) NumPy配列 - targetの対応点の座標
+        correspondence_indices: (M, 2) NumPy配列 - sourceとtargetの対応点のインデックスペア
     """
     # KDTree for efficient nearest neighbor search
     nbrs = NearestNeighbors(n_neighbors=1, algorithm='kd_tree').fit(features2)
     distances, indices = nbrs.kneighbors(features1) # indices: (N1, 1)
 
-    # 双方向NNマッチング (Optional, but good for robustness)
+    # 双方向NNマッチング
     nbrs_rev = NearestNeighbors(n_neighbors=1, algorithm='kd_tree').fit(features1)
     distances_rev, indices_rev = nbrs_rev.kneighbors(features2)
 
-    correspondences = []
+    correspondences_list = [] # (src_idx, tgt_idx) のリストを保持
     source_corr_points = []
     target_corr_points = []
 
     for i in range(features1.shape[0]):
-        j = indices[i, 0] # features1[i] の features2 におけるNNのインデックス
-        if distances[i, 0] < threshold: # 距離閾値チェック
-            # features2[j] の features1 におけるNNが features1[i] であるか (双方向チェック)
+        j = indices[i, 0]
+        if distances[i, 0] < threshold:
             if indices_rev[j, 0] == i:
-                correspondences.append((i, j))
-                source_corr_points.append(points1[i])
-                target_corr_points.append(points2[j])
+                correspondences_list.append((i, j)) # ここでインデックスをタプルで追加
 
-    source_corr_points = np.array(source_corr_points, dtype=np.float64) # Open3Dはfloat64を好む
-    target_corr_points = np.array(target_corr_points, dtype=np.float64)
-
-    print(f"Found {len(correspondences)} initial correspondences.")
-    return source_corr_points, target_corr_points
+    source_corr_points = np.array([points1[c[0]] for c in correspondences_list], dtype=np.float64)
+    target_corr_points = np.array([points2[c[1]] for c in correspondences_list], dtype=np.float64)
+    
+    # correspondence_indices は、o3d.utility.Vector2iVector に直接渡すために (M, 2) numpy.int32 にする
+    # または、correspondences_list (Iterable) を直接渡す
+    
+    print(f"Found {len(correspondences_list)} initial correspondences.")
+    return source_corr_points, target_corr_points, correspondences_list # リストのまま返す
 
 def visualize_registration_result(source_pcd_o3d, target_pcd_o3d, transformed_source_pcd_o3d, title="Registration Result"):
     """位置合わせ結果を可視化する"""
@@ -113,7 +140,6 @@ def visualize_registration_result(source_pcd_o3d, target_pcd_o3d, transformed_so
     # 可視化
     o3d.visualization.draw_geometries([source_pcd_o3d, target_pcd_o3d, transformed_source_pcd_o3d], window_name=title)
     print("Close the visualization window to continue.")
-
 
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -130,8 +156,8 @@ if __name__ == '__main__':
         exit()
     source_pcd_raw = source_pcd_raw.astype(np.float32)
 
-    print(f"Loading target point cloud from {TARGET_PLY_PATH}...")
-    target_pcd_raw = load_ply(TARGET_PLY_PATH)
+    print(f"Transforming source point cloud")
+    target_pcd_raw = random_transform(source_pcd_raw)
     if target_pcd_raw is None:
         print("Failed to load target point cloud. Exiting.")
         exit()
@@ -160,7 +186,8 @@ if __name__ == '__main__':
     # 4. 特徴量マッチング
     print("Finding correspondences based on features...")
     start_time = time.time()
-    src_corr_pts_np, tgt_corr_pts_np = find_correspondences(
+    # 戻り値に correspondence_list を追加 (numpy配列ではなくPythonのリスト)
+    src_corr_pts_np, tgt_corr_pts_np, correspondences_list = find_correspondences(
         source_features, source_pcd_processed_coords,
         target_features, target_pcd_processed_coords,
         threshold=FEATURE_MATCHING_THRESHOLD
@@ -172,12 +199,19 @@ if __name__ == '__main__':
         print("Not enough correspondences found for RANSAC. Aborting registration.")
         exit()
 
-    # Open3DのPointToPointCorrespondenceVectorを作成 (RANSAC用)
-    # これは非推奨なので、registration_ransac_based_on_feature_matching を使う方が良いが、
-    # シンプルな点対点マッチングの結果をRANSACに渡す一般的な方法として示す
-    # Open3Dの古いAPIを使うと警告が出る可能性があります。
-    # 0.16.0以降のOpen3Dでは、feature_matching_methodを指定する方が推奨されます。
+    # --- 修正箇所: Vector2iVector の作成方法 ---
+    # `correspondences_list` はタプルのリストなので、Iterable として直接渡す
+    # Open3Dの古いAPIを使うと警告が出る可能性がありますが、TypeErrorは回避できます。
+    # この correspondence_set は、o3d.pipelines.registration.registration_ransac_based_on_correspondence
+    # のような関数に渡すものであり、o3d.pipelines.registration.registration_ransac_based_on_feature_matching
+    # には直接渡しません。
+    # したがって、この行はコメントアウトまたは削除しても良いですが、TypeErrorの解消を優先します。
+    # 実際には、この行は RANSAC の引数として使われないため、不要な場合はコメントアウト/削除してください。
 
+    # --- 修正箇所終了 ---
+
+
+    
     # 5. RANSACによる初期変換推定
     print("Estimating initial transform using RANSAC...")
     start_time = time.time()
@@ -251,11 +285,6 @@ if __name__ == '__main__':
     # This is assuming you extracted the original indices when finding correspondences
     # For now, let's just use the source_corr_pts_np and target_corr_pts_np directly with `TransformationEstimationPointToPoint`
     
-    correspondence_set = o3d.utility.Vector2iVector(
-        np.arange(len(src_corr_pts_np)).reshape(-1, 1), # Corresponds to index in src_corr_pts_np
-        np.arange(len(tgt_corr_pts_np)).reshape(-1, 1)  # Corresponds to index in tgt_corr_pts_np
-    )
-
     # RANSAC based on corresponding point pairs
     # Note: `registration_ransac_based_on_correspondence` is older/simpler
     # For feature-based RANSAC, it needs `o3d.pipelines.registration.registration_ransac_based_on_feature_matching`
@@ -296,10 +325,13 @@ if __name__ == '__main__':
     # criteria: RANSACの収束基準 (最大繰り返し回数、信頼度)
 
     result_ransac = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
-        source_o3d_processed, target_o3d_processed, 
-        source_features_o3d, target_features_o3d,
-        distance_threshold=RANSAC_DISTANCE_THRESHOLD, # 3D空間での距離閾値
-        estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(False), # Falseはスケールを考慮しない
+        source=source_o3d_processed,              # source PointCloud
+        target=target_o3d_processed,              # target PointCloud
+        source_feature=source_features_o3d,       # source Feature
+        target_feature=target_features_o3d,       # target Feature
+        mutual_filter=True,                       # <-- この引数を追加（通常True）
+        max_correspondence_distance=RANSAC_DISTANCE_THRESHOLD, # <-- 名前を修正
+        estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
         ransac_n=3,
         criteria=o3d.pipelines.registration.RANSACConvergenceCriteria(
             max_iteration=RANSAC_MAX_ITERATIONS,
@@ -339,6 +371,10 @@ if __name__ == '__main__':
 
     # 最終位置合わせの可視化 (ICP適用後)
     transformed_source_pcd_final = source_o3d_original.transform(final_transform)
+
+    print(f"Source points count: {len(source_o3d_original.points)}")
+    print(f"Target points count: {len(target_o3d_original.points)}")
+    print(f"Transformed source points count: {len(transformed_source_pcd_final.points)}")
     visualize_registration_result(source_o3d_original, target_o3d_original, transformed_source_pcd_final, title="ICP Final Registration")
 
     print("Registration process complete.")
