@@ -11,7 +11,7 @@ from model import DGCNNLocalFeatureExtractor # DGCNNLocalFeatureExtractorのみ
 from dataset import load_ply, farthest_point_sampling # load_ply関数のみ
 
 # --- 設定 ---
-MODEL_PATH = "dgcnn_local_feature_extractor_contrastive_2.pth" # 学習済みモデルのパス
+MODEL_PATH = "dgcnn_local_feature_extractor_contrastive_128_nearsample.pth" # 学習済みモデルのパス
 EMB_DIMS = 1024 # 学習時のemb_dimsに合わせる
 PROJECTION_DIM = 128 # 学習時のprojection_dimに合わせる (推論時は使わないがモデル定義に必要)
 K_NEIGHBORS = 20 # DGCNNのK (学習時と同じ値)
