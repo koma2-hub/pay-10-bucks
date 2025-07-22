@@ -102,7 +102,7 @@ def get_graph_feature_generic(x, k=20, idx=None):
 
 # --- DGCNNLocalFeatureExtractor モデル ---
 class DGCNNLocalFeatureExtractor(nn.Module):
-    def __init__(self, k=20, emb_dims=1024, projection_dim=128):
+    def __init__(self, k=20, emb_dims=512, projection_dim=128):
         super(DGCNNLocalFeatureExtractor, self).__init__()
         self.k = k
         self.emb_dims = emb_dims

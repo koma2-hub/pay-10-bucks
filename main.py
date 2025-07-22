@@ -17,7 +17,7 @@ from dataset_with_fps import ContrastivePointCloudDataset, load_ply, farthest_po
 NUM_POINTS_PER_PATCH = 128 # 各パッチの点数
 PATCH_RADIUS = None # パッチサンプリングの半径 (調整してください)
 BATCH_SIZE = 32 # コントラスティブ学習のバッチサイズ (大きいほど良い)
-EMB_DIMS = 1024 # DGCNNの埋め込み次元
+EMB_DIMS = 512 # DGCNNの埋め込み次元 元論文では512
 PROJECTION_DIM = 128 # プロジェクションヘッドの出力次元
 K_NEIGHBORS = 20 # DGCNNのK (K-NNグラフ構築)
 
@@ -26,7 +26,7 @@ WEIGHT_DECAY = 1e-4
 NUM_EPOCHS = 100
 TEMPERATURE = 0.07 # InfoNCE Lossの温度パラメータ
 
-MODEL_SAVE_PATH = "dgcnn_local_feature_extractor_contrastive_128_nearsample.pth"
+MODEL_SAVE_PATH = "dgcnn_local_feature_extractor_contrastive_patchpoints128_embdims512_nearsample.pth"
 DATA_ROOT_DIR = './data' # PLYファイルがあるdata/raw/の親ディレクトリ
 
 
@@ -151,16 +151,9 @@ if __name__ == '__main__':
             best_loss = avg_loss
             torch.save(model.state_dict(), MODEL_SAVE_PATH)
             print(f"Model saved to {MODEL_SAVE_PATH} (Loss: {best_loss:.4f})")
-<<<<<<< HEAD
-
-    learning_time = time.time() - start
-    print("\n--- Contrastive Learning Training Complete ---")
-    print("Total Learning Time:", learning_time)
-=======
     learning_time = time.time()
     print("\n--- Contrastive Learning Training Complete ---")
     print("learning time:",learning_time)
->>>>>>> 3926c45 (change sample patch)
 
     # 4. 学習済みモデルのロードと特徴量抽出
     print("\n--- Loading Trained Model for Feature Extraction ---")

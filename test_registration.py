@@ -1,4 +1,4 @@
-# main_registration.py
+# test_registration.py
 import os
 import torch
 import numpy as np
@@ -11,14 +11,13 @@ from model import DGCNNLocalFeatureExtractor # DGCNNLocalFeatureExtractorのみ
 from dataset import load_ply, farthest_point_sampling # load_ply関数のみ
 
 # --- 設定 ---
-MODEL_PATH = "dgcnn_local_feature_extractor_contrastive.pth" # 学習済みモデルのパス
+MODEL_PATH = "dgcnn_local_feature_extractor_contrastive_128_nearsample.pth" # 学習済みモデルのパス
 EMB_DIMS = 1024 # 学習時のemb_dimsに合わせる
 PROJECTION_DIM = 128 # 学習時のprojection_dimに合わせる (推論時は使わないがモデル定義に必要)
 K_NEIGHBORS = 20 # DGCNNのK (学習時と同じ値)
 NUM_POINTS_PER_PATCH = 1024
 # 位置合わせ対象の点群ファイルパス (実際のファイルパスに合わせてください)
 SOURCE_PLY_PATH = "./test_data/lab1.ply" # 例: ロボットの現在のスキャン
-TARGET_PLY_PATH = "./test_data/lab2.ply" # 例: ロボットの既知の地図、または以前のスキャン
 
 # --- 特徴量マッチングとRANSACのパラメータ ---
 FEATURE_MATCHING_THRESHOLD = 0.7# 特徴量間の最大距離 (コサイン類似度なら0.8など)
@@ -30,7 +29,7 @@ RANSAC_CONFIDENCE = 0.999 # RANSACの信頼度
 ICP_THRESHOLD = 0.02 # ICPの対応点探索距離 (RANSACより厳しくすることが多い)
 ICP_MAX_ITERATIONS = 200 # ICPの最大繰り返し回数
 
-def random_transform(points_np, rotation_range=(0, 30)):
+def random_transform(points_np, rotation_range=(0, 30), translation_range=(-0.1, 0.1)):
     """
     点群にランダムなアフィン変換、ノイズ、ドロップアウトを適用する関数。
     points_np: (N, C) NumPy配列 (Nは点数、Cは特徴量次元, C>=3)
@@ -39,6 +38,7 @@ def random_transform(points_np, rotation_range=(0, 30)):
     
     # 1. 回転 (Z軸回転が一般的ですが、XYZ軸回転も可)
     angle_z = np.random.uniform(np.deg2rad(rotation_range[0]), np.deg2rad(rotation_range[1]))
+    angle_z = np.deg2rad(20)
     cos_z = np.cos(angle_z)
     sin_z = np.sin(angle_z)
     rotation_matrix = np.array([
@@ -48,6 +48,11 @@ def random_transform(points_np, rotation_range=(0, 30)):
     ], dtype=np.float32)
     # その他の軸回転も追加可能
     transformed_points[:, :3] = transformed_points[:, :3] @ rotation_matrix.T
+    print(rotation_matrix)
+        # 2. 並進
+    translation = np.random.uniform(translation_range[0], translation_range[1], size=3).astype(np.float32)
+    transformed_points[:, :3] += translation
+    
     return transformed_points
 
 def load_model(model_path, emb_dims, projection_dim, k_neighbors, device):
@@ -131,11 +136,17 @@ def find_correspondences(features1, points1, features2, points2, threshold):
     print(f"Found {len(correspondences_list)} initial correspondences.")
     return source_corr_points, target_corr_points, correspondences_list # リストのまま返す
 
+def visualize_pcd(source, target, title = "point clouds"):
+    source.paint_uniform_color([1, 0, 0]) #red
+    target.paint_uniform_color([0, 0, 1]) #blueq
+    o3d.visualization.draw_geometries([source, target], window_name=title)
+    print("press q to continue.")
+
 def visualize_registration_result(source_pcd_o3d, target_pcd_o3d, transformed_source_pcd_o3d, title="Registration Result"):
     """位置合わせ結果を可視化する"""
-    source_pcd_o3d.paint_uniform_color([1, 0.706, 0]) # 黄色 (Source)
-    target_pcd_o3d.paint_uniform_color([0, 0.651, 0.929]) # 青色 (Target)
-    transformed_source_pcd_o3d.paint_uniform_color([1, 0, 0]) # 赤色 (Transformed Source)
+    source_pcd_o3d.paint_uniform_color([1, 0, 0]) # red (Source)
+    target_pcd_o3d.paint_uniform_color([0, 0, 1]) # blue (Target)
+    transformed_source_pcd_o3d.paint_uniform_color([0, 1, 0]) # green (Transformed Source)
 
     # 可視化
     o3d.visualization.draw_geometries([source_pcd_o3d, target_pcd_o3d, transformed_source_pcd_o3d], window_name=title)
@@ -151,17 +162,23 @@ if __name__ == '__main__':
     # 2. 2つの点群データの読み込み
     print(f"Loading source point cloud from {SOURCE_PLY_PATH}...")
     source_pcd_raw = load_ply(SOURCE_PLY_PATH)
+    print(source_pcd_raw.shape)
     if source_pcd_raw is None:
         print("Failed to load source point cloud. Exiting.")
         exit()
+
     source_pcd_raw = source_pcd_raw.astype(np.float32)
 
     print(f"Transforming source point cloud")
-    target_pcd_raw = random_transform(source_pcd_raw)
+    target_pcd_raw= random_transform(source_pcd_raw)
+    print(target_pcd_raw.shape)
+
     if target_pcd_raw is None:
         print("Failed to load target point cloud. Exiting.")
         exit()
+
     target_pcd_raw = target_pcd_raw.astype(np.float32)
+
 
     # Open3Dの点群オブジェクトを作成 (可視化用)
     source_o3d_original = o3d.geometry.PointCloud()
@@ -169,7 +186,7 @@ if __name__ == '__main__':
 
     target_o3d_original = o3d.geometry.PointCloud()
     target_o3d_original.points = o3d.utility.Vector3dVector(target_pcd_raw[:, :3])
-
+    
     # 3. ローカル特徴量の抽出
     print("Extracting features from source point cloud...")
     start_time = time.time()
@@ -361,20 +378,23 @@ if __name__ == '__main__':
     end_time = time.time()
     print(f"ICP completed in {end_time - start_time:.4f} seconds.")
     print("Final Transform from ICP:\n", final_transform)
-
+    #print("True Transform Matrix\n", transform_matrix)
     # 7. 結果の可視化
     print("Visualizing registration results...")
     
+    visualize_pcd(source_o3d_original, target_o3d_original, title="source and target")
+
     # 初期位置の可視化 (RANSAC適用前)
-    transformed_source_pcd_ransac = source_o3d_original.transform(initial_transform)
-    # visualize_registration_result(source_o3d_original, target_o3d_original, transformed_source_pcd_ransac, title="RANSAC Initial Registration")
+    transformed_source_pcd_ransac = o3d.geometry.PointCloud()
+    transformed_source_pcd_ransac.points = o3d.utility.Vector3dVector(source_pcd_raw[:, :3])
+    transformed_source_pcd_ransac.transform(initial_transform)
+    visualize_pcd(transformed_source_pcd_ransac, target_o3d_original,title="transformed source and target")
 
+    #visualize_registration_result(source_o3d_original, target_o3d_original, transformed_source_pcd_ransac, title="RANSAC Initial Registration")
     # 最終位置合わせの可視化 (ICP適用後)
-    transformed_source_pcd_final = source_o3d_original.transform(final_transform)
-
-    print(f"Source points count: {len(source_o3d_original.points)}")
-    print(f"Target points count: {len(target_o3d_original.points)}")
-    print(f"Transformed source points count: {len(transformed_source_pcd_final.points)}")
-    visualize_registration_result(source_o3d_original, target_o3d_original, transformed_source_pcd_final, title="ICP Final Registration")
-
+    transformed_source_pcd_final = o3d.geometry.PointCloud()
+    transformed_source_pcd_final.points = o3d.utility.Vector3dVector(source_pcd_raw[:, :3])
+    transformed_source_pcd_final.transform(final_transform)
+    visualize_pcd(transformed_source_pcd_final, target_o3d_original, title="final registration")
+    
     print("Registration process complete.")
