@@ -11,14 +11,19 @@ from model import DGCNNLocalFeatureExtractor # DGCNNLocalFeatureExtractorのみ
 from dataset import load_ply, farthest_point_sampling # load_ply関数のみ
 
 # --- 設定 ---
+<<<<<<< HEAD
 MODEL_PATH = "dgcnn_local_feature_extractor_contrastive_128_nearsample.pth" # 学習済みモデルのパス
 EMB_DIMS = 1024 # 学習時のemb_dimsに合わせる
+=======
+MODEL_PATH = "dgcnn_64patchpoint_512embdims_128projdim_20k.pth" # 学習済みモデルのパス
+EMB_DIMS = 512 # 学習時のemb_dimsに合わせる
+>>>>>>> 69876e3 (make new dataset)
 PROJECTION_DIM = 128 # 学習時のprojection_dimに合わせる (推論時は使わないがモデル定義に必要)
 K_NEIGHBORS = 20 # DGCNNのK (学習時と同じ値)
-NUM_POINTS_PER_PATCH = 1024
+NUM_POINTS_PER_PATCH = 64
 # 位置合わせ対象の点群ファイルパス (実際のファイルパスに合わせてください)
-SOURCE_PLY_PATH = "./test_data/lab1.ply" # 例: ロボットの現在のスキャン
-TARGET_PLY_PATH = "./test_data/lab2.ply" # 例: ロボットの既知の地図、または以前のスキャン
+SOURCE_PLY_PATH = "./test_data/lab1_icn1024.ply" # 例: ロボットの現在のスキャン
+TARGET_PLY_PATH = "./test_data/lab2_icn1024.ply" # 例: ロボットの既知の地図、または以前のスキャン
 
 # --- 特徴量マッチングとRANSACのパラメータ ---
 FEATURE_MATCHING_THRESHOLD = 0.7# 特徴量間の最大距離 (コサイン類似度なら0.8など)

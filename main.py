@@ -10,14 +10,18 @@ from torch_geometric.loader import DataLoader as GeometricDataLoader # PyGのDat
 
 # モデルとデータセットのインポート
 from model import DGCNNLocalFeatureExtractor, get_graph_feature, knn_coords, knn_features, get_graph_feature_generic
-from dataset_with_fps import ContrastivePointCloudDataset, load_ply, farthest_point_sampling, sample_patch_from_point_cloud, random_transform
+from dataset_with_icn import ContrastivePointCloudDataset, load_ply, sample_patch_from_point_cloud, random_transform
 
 
 # --- ハイパーパラメータ設定 ---
 NUM_POINTS_PER_PATCH = 128 # 各パッチの点数
 PATCH_RADIUS = None # パッチサンプリングの半径 (調整してください)
 BATCH_SIZE = 32 # コントラスティブ学習のバッチサイズ (大きいほど良い)
+<<<<<<< HEAD
 EMB_DIMS = 512 # DGCNNの埋め込み次元 元論文では512
+=======
+EMB_DIMS = 512 # DGCNNの埋め込み次元
+>>>>>>> 69876e3 (make new dataset)
 PROJECTION_DIM = 128 # プロジェクションヘッドの出力次元
 K_NEIGHBORS = 20 # DGCNNのK (K-NNグラフ構築)
 
@@ -26,8 +30,13 @@ WEIGHT_DECAY = 1e-4
 NUM_EPOCHS = 100
 TEMPERATURE = 0.07 # InfoNCE Lossの温度パラメータ
 
+<<<<<<< HEAD
 MODEL_SAVE_PATH = "dgcnn_local_feature_extractor_contrastive_patchpoints128_embdims512_nearsample.pth"
 DATA_ROOT_DIR = './data' # PLYファイルがあるdata/raw/の親ディレクトリ
+=======
+MODEL_SAVE_PATH = "dgcnn_64patchpoint_512embdims_128projdim_20k.pth"
+DATA_ROOT_DIR = './data/robot_record1024/' # PLYファイルがあるdata/raw/の親ディレクトリ
+>>>>>>> 69876e3 (make new dataset)
 
 
 def train_contrastive(model, dataloader, optimizer, device, temperature):
@@ -151,9 +160,16 @@ if __name__ == '__main__':
             best_loss = avg_loss
             torch.save(model.state_dict(), MODEL_SAVE_PATH)
             print(f"Model saved to {MODEL_SAVE_PATH} (Loss: {best_loss:.4f})")
+<<<<<<< HEAD
     learning_time = time.time()
     print("\n--- Contrastive Learning Training Complete ---")
     print("learning time:",learning_time)
+=======
+
+    learning_time = time.time() - start
+    print("\n--- Contrastive Learning Training Complete ---")
+    print("Total Learning Time:", learning_time)
+>>>>>>> 69876e3 (make new dataset)
 
     # 4. 学習済みモデルのロードと特徴量抽出
     print("\n--- Loading Trained Model for Feature Extraction ---")
