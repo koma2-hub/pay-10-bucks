@@ -144,11 +144,11 @@ class DGCNNLocalFeatureExtractor(nn.Module):
         x = self.conv1(x)
         x1 = x.max(dim=-1, keepdim=False)[0]
 
-        x = get_graph_feature_generic(x1, k=self.k)
+        x = get_graph_feature(x1, k=self.k)
         x = self.conv2(x)
         x2 = x.max(dim=-1, keepdim=False)[0]
 
-        x = get_graph_feature_generic(x2, k=self.k)
+        x = get_graph_feature(x2, k=self.k)
         x = self.conv3(x)
         x3 = x.max(dim=-1, keepdim=False)[0]
 

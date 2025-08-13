@@ -1,2 +1,8 @@
 *.ply
+<<<<<<< HEAD
 *.pth
+=======
+/test/
+*.pth
+/test_programs/
+>>>>>>> dbc018f (a)
