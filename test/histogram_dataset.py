@@ -93,20 +93,40 @@ class HistogramPairDataset(Dataset):
 data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw/"
 file_names = os.listdir(data_path)
 dummy_pairs = []
-k = 64
+hist_datas = []
+k = 128
+bins = 128
 
 for file in file_names:
     file_path = os.path.join(data_path, file)
     pcd = load_ply(file_path)
     indices = knn(pcd, k = k)
-    #サンプリングする点をランダムに選択
-    rng = np.random.default_rng()
-    sample_point = rng.integers(pcd.shape[0])
-    pcd_intensity = pcd[indices[sample_point], :3]
-    print(pcd_intensity.shape)
-    #サンプリングした点を保存
-    sampled_points = np.copy(indices[sample_point])
-    print(sampled_points)
+
+    """
+    正例のペアを作成
+    一つのplyファイルから4点ランダムに選びそれ周りの点群の輝度値を取得する
+    """
+    for i in range(4):
+        #サンプリングする点をランダムに選択
+        rng = np.random.default_rng()
+        sample_point = rng.integers(pcd.shape[0])
+        #サンプリングする点の近傍点のindexを取得
+        neighbor_indices = indices[sample_point]
+        #サンプリングする点とその近傍点の輝度値を取得
+        pcd_intensity = pcd[neighbor_indices,-1]
+        #ヒストグラムの作成(オリジナル)
+        hist_data = create_intensity_histogram(pcd_intensity, bins=bins, density=True)
+        #ヒストグラムの作成(ノイズ有)
+        pcd_intensity_noise = np.copy(pcd_intensity)
+        pcd_intensity_noise = pcd_intensity_noise + np.random.normal(0, 0.05, k)
+        hist_data_noise = create_intensity_histogram(pcd_intensity_noise, bins=bins, density=True)
+        #ヒストグラムをペアとして保存
+        dummy_pairs.append((hist_data, hist_data_noise, 1))
+        print(pcd_intensity)
+        print(pcd_intensity_noise)
+        print("-----")
+        
+
 """
 for i in range(1000): # 正例ペアを1000個作成
     h1 = np.random.rand(128)
