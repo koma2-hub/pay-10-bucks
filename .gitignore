@@ -1,2 +1,4 @@
 *.ply
 *.pth
+*.npz
+*.png

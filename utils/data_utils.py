@@ -53,3 +53,49 @@ def farthest_point_sampling(pcd, k, metrics = l2_norm):
         distances[i, :] = metrics(farthest_point, pcd)
         min_distances = np.minimum(min_distances, distances[i, :])
     return indices
+
+def knn(x: np.ndarray, k: int):
+    """
+    一つの点群データ `x` の各点について、k近傍点のインデックスをNumPyで計算する。
+
+    Args:
+        x: 点群データ。形状は (N, C)。
+           N: 点の数
+           C: 特徴量次元
+        k: 探す近傍点の数。
+
+    Returns:
+        np.ndarray: 各点のk近傍点のインデックス。形状は (N, k)。
+    """
+    num_points = x.shape[0]
+
+    # kが点群の総点数を超えないように調整
+    k = min(k, num_points)
+    if k <= 1:
+        k = 1
+    x_norm_sq = np.sum(x**2, axis=1, keepdims=True)  # 形状: (N, 1)
+    dot_product = np.matmul(x, x.T)  # 形状: (N, N)
+    dist_matrix = x_norm_sq - 2 * dot_product + x_norm_sq.T  # 形状: (N, N)
+    indices = np.argpartition(dist_matrix, k, axis=1)[:, :k]
+
+    return indices
+
+def create_intensity_histogram(point_cloud_intensity_data, bins=4, density=True):
+    """
+    輝度値の配列から正規化されたヒストグラムを作成する関数
+    """
+    # ヒストグラムを作成
+    hist, bin_edges = np.histogram(
+        point_cloud_intensity_data,
+        bins=bins,
+        range=(0.0, 1.0), # 輝度値が0.0~1.0に正規化されていると仮定
+        density=density  # Trueにするとヒストグラムの面積が1になるように正規化される
+    )
+    
+    # # (別オプション) L2正規化
+    # hist = hist.astype(np.float32)
+    # l2_norm = np.linalg.norm(hist)
+    # if l2_norm > 0:
+    #     hist /= l2_norm
+        
+    return hist
