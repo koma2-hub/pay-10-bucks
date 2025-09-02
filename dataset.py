@@ -69,11 +69,10 @@ def sample_patch_from_point_cloud(points_np, num_points_per_patch, patch_radius=
     center_point_index = np.random.randint(len(points_np))
     center = points_np[center_point_index, :3] # 座標のみで近傍探索
 
-    # --- 修正箇所 ---
-    if patch_radius is not None: # ここを radius -> patch_radius
+    if patch_radius is not None:
         # 半径内の点を抽出
         distances = np.linalg.norm(points_np[:, :3] - center, axis=1)
-        indices = np.where(distances <= patch_radius)[0] # ここも radius -> patch_radius
+        indices = np.where(distances <= patch_radius)[0]
     elif k_neighbors is not None:
         # K近傍点を抽出 (効率的な実装にはKD-treeなどを使用)
         from sklearn.neighbors import NearestNeighbors

@@ -68,6 +68,10 @@ def downsample_pcd(pointcloud, downsample_point, intensity=False) -> np.ndarray:
 # --- パッチサンプリングとデータ拡張の補助関数 ---
 # dataset.py (sample_patch_from_point_cloud 関数内)
 
+<<<<<<< HEAD
+=======
+#k_neighbors == num_points_per_patch??
+>>>>>>> b5a18bd (a)
 def sample_patch_from_point_cloud(points_np, num_points_per_patch, center_point = None, patch_radius=None, k_neighbors=None):
     """
     点群から中心点周辺のパッチをサンプリングする関数。
@@ -80,11 +84,16 @@ def sample_patch_from_point_cloud(points_np, num_points_per_patch, center_point 
         center = points_np[center_point_index, :3] # 座標のみで近傍探索
     else:
         center = center_point
+<<<<<<< HEAD
     # --- 修正箇所 ---
     if patch_radius is not None: # ここを radius -> patch_radius
+=======
+
+    if patch_radius is not None:
+>>>>>>> b5a18bd (a)
         # 半径内の点を抽出
         distances = np.linalg.norm(points_np[:, :3] - center, axis=1)
-        indices = np.where(distances <= patch_radius)[0] # ここも radius -> patch_radius
+        indices = np.where(distances <= patch_radius)[0]
     elif k_neighbors is not None:
         # K近傍点を抽出 (効率的な実装にはKD-treeなどを使用)
         knn = NearestNeighbors(n_neighbors=k_neighbors, algorithm='auto').fit(points_np[:, :3])
@@ -172,6 +181,7 @@ def random_transform(points_np, rotation_range=(-180, 180), translation_range=(-
 class ContrastivePointCloudDataset(torch.utils.data.Dataset):
     def __init__(self, root_dir,n_sample = 1024, num_points_per_patch=256, patch_radius=None, transform=None):
         self.root_dir = root_dir
+        self.n_sample = n_sample
         self.num_points_per_patch = num_points_per_patch
         self.patch_radius = patch_radius
         self.transform = transform # オプションでデータ拡張を適用
@@ -196,7 +206,11 @@ class ContrastivePointCloudDataset(torch.utils.data.Dataset):
         original_points = load_ply(file_path) # (N, 4) - xyz intensity
 
         #読み込んだ点群を1024 or 2048点までFPSでダウンサンプリングをする
+<<<<<<< HEAD
         original_points = downsample_pcd(original_points, self.n_sample, intensity=True)
+=======
+        original_points = downsample_pcd(original_points, self.n_sample , intensity=True)
+>>>>>>> b5a18bd (a)
 
         # NumPy配列をfloat32にキャスト (モデルのRuntimeError対策)
         if original_points is not None:
@@ -216,10 +230,18 @@ class ContrastivePointCloudDataset(torch.utils.data.Dataset):
             self.num_points_per_patch, 
             patch_radius=self.patch_radius
         )
+<<<<<<< HEAD
         patch_B_raw, _ = sample_patch_from_point_cloud(
             original_points, 
             self.num_points_per_patch, 
             center_point= point_in_patch,
+=======
+        #パッチBではパッチAからランダムに1つ点を選びそれを中心点とする.
+        patch_B_raw , _ = sample_patch_from_point_cloud(
+            original_points, 
+            self.num_points_per_patch, 
+            center_point = point_in_patch,
+>>>>>>> b5a18bd (a)
             patch_radius=self.patch_radius 
         )
        
