@@ -3,7 +3,7 @@ from torch import nn
 
 class kICN(nn.Modlue):
     def __init__(self, input_size):
-        super(ICN, self).__init__()
+        super(kICN, self).__init__()
         self.net = nn.Sequential(
             nn.Linear(input_size*2, 128),
             nn.BatchNorm1d(128),
