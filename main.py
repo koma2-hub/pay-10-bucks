@@ -14,11 +14,16 @@ from dataset_with_icn import ContrastivePointCloudDataset, load_ply, sample_patc
 
 
 # --- ハイパーパラメータ設定 ---
-NUM_POINTS_PER_PATCH = 128 # 各パッチの点数
+NUM_POINTS_PER_PATCH = 64 # 各パッチの点数
 PATCH_RADIUS = None # パッチサンプリングの半径 (調整してください)
 BATCH_SIZE = 32 # コントラスティブ学習のバッチサイズ (大きいほど良い)
+<<<<<<< HEAD
 EMB_DIMS = 512 # DGCNNの埋め込み次元 元論文では512
 PROJECTION_DIM = 128 # プロジェクションヘッドの出力次元
+=======
+EMB_DIMS = 1024 # DGCNNの埋め込み次元 元論文では512
+PROJECTION_DIM = 256 # プロジェクションヘッドの出力次元
+>>>>>>> 3bb8274 (merge)
 K_NEIGHBORS = 20 # DGCNNのK (K-NNグラフ構築)
 
 LEARNING_RATE = 0.001
@@ -26,8 +31,13 @@ WEIGHT_DECAY = 1e-4
 NUM_EPOCHS = 100
 TEMPERATURE = 0.07 # InfoNCE Lossの温度パラメータ
 
+<<<<<<< HEAD
 MODEL_SAVE_PATH = "dgcnn_64patchpoint_512embdims_128projdim_20k.pth"
 DATA_ROOT_DIR = './data/robot_record1024/' # PLYファイルがあるdata/raw/の親ディレクトリ
+=======
+MODEL_SAVE_PATH = "dgcnn_64patchpoint_1024enbdims_256projdim_20k.pth"
+DATA_ROOT_DIR = '/mnt/c/Users/komatsu/SICK/pay-10-bucks/data/robot_record1024/' # PLYファイルがあるdata/raw/の親ディレクトリ
+>>>>>>> 3bb8274 (merge)
 
 
 def train_contrastive(model, dataloader, optimizer, device, temperature):
@@ -150,6 +160,7 @@ if __name__ == '__main__':
             best_loss = avg_loss
             torch.save(model.state_dict(), MODEL_SAVE_PATH)
             print(f"Model saved to {MODEL_SAVE_PATH} (Loss: {best_loss:.4f})")
+
 
     learning_time = time.time() - start
     print("\n--- Contrastive Learning Training Complete ---")
