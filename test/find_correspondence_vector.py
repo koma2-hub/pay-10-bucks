@@ -87,7 +87,7 @@ MODEL_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_model/vector_siamese_mod
 K_NEIGHBORS = 64
 INPUT_DIM = 64
 EMBEDDING_DIM = 32
-DISTANCE_THRESHOLD = 0.60
+DISTANCE_THRESHOLD = 0.87
 
 # --- データ読み込みと記述子計算 ---
 print("Loading point clouds and computing descriptors...")
@@ -97,20 +97,20 @@ tgt_icn_fps = load_ply(TGT_PATH)
 src_knn = knn(src_icn_fps, k=K_NEIGHBORS)
 tgt_knn = knn(tgt_icn_fps, k=K_NEIGHBORS)
 
-src_histograms = []
+src_vector = []
 for i in range(src_knn.shape[0]):
     neighbor_indices = src_knn[i]
     src_intensity = src_icn_fps[neighbor_indices, -1]
-    src_histograms.append(create_intensity_histogram(src_intensity, bins=INPUT_DIM))
+    src_vector.append(src_intensity)
 
-tgt_histograms = []
+tgt_vector = []
 for i in range(tgt_knn.shape[0]):
     neighbor_indices = tgt_knn[i]
     tgt_intensity = tgt_icn_fps[neighbor_indices, -1]
-    tgt_histograms.append(create_intensity_histogram(tgt_intensity, bins=INPUT_DIM))
+    tgt_vector.append(tgt_intensity)
 
-src_histograms = np.array(src_histograms, dtype=np.float32)
-tgt_histograms = np.array(tgt_histograms, dtype=np.float32)
+src_vector = np.array(src_vector, dtype=np.float32)
+tgt_vector = np.array(tgt_vector, dtype=np.float32)
 
 # --- モデルのロードと設定 ---
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -125,32 +125,32 @@ model.eval()
 # --- ★★★【修正箇所】Ratio Testを導入した効率的なマッチング処理 ★★★ ---
 print("Matching descriptors using the trained model with Ratio Test...")
 # (NumPy配列をTorchテンソルに変換する部分は同じ)
-src_hist_tensor = torch.from_numpy(src_histograms).to(device)
-tgt_hist_tensor = torch.from_numpy(tgt_histograms).to(device)
+src_vector_tensor = torch.from_numpy(src_vector).to(device)
+tgt_vector_tensor = torch.from_numpy(tgt_vector).to(device)
 
 correspondences = []
 # Ratio Testのための閾値
-RATIO_THRESHOLD = 0.9 # この値は0.7～0.8あたりで調整します
+RATIO_THRESHOLD = 1 # この値は0.7～0.8あたりで調整します
 
 with torch.no_grad():
-    emb_src = model.sub_network(src_hist_tensor)
-    emb_tgt = model.sub_network(tgt_hist_tensor)
+    # 全てのヒストグラムを一度にモデルに通し、特徴ベクトル（Embedding）を計算
+    # model.sub_network を直接使うことで、SiameseNetworkのforwardを2回呼ぶ無駄を省く
+    emb_src = model.sub_network(src_vector_tensor)
+    emb_tgt = model.sub_network(tgt_vector_tensor)
 
+    # ソース点群の各点について、ターゲット点群で最も近い点を探す
     for i in range(len(emb_src)):
+        # i番目のソース特徴ベクトルと、全てのターゲット特徴ベクトルとの距離を計算
         distances = F.pairwise_distance(emb_src[i].unsqueeze(0), emb_tgt)
         
-        # 距離をソートし、1位と2位を取得
-        sorted_dist, sorted_indices = torch.sort(distances)
+        # 最も距離が近い点のインデックスと、その距離を取得
+        best_dist, best_idx = torch.min(distances, dim=0)
         
-        dist_1st = sorted_dist[0] # 1位の距離
-        dist_2nd = sorted_dist[1] # 2位の距離
-        
-        # Ratio Testを適用
-        if dist_1st < dist_2nd * RATIO_THRESHOLD:
-            # 閾値チェックは任意ですが、残しておいても良いでしょう
-            if dist_1st.item() < DISTANCE_THRESHOLD:
-                best_idx = sorted_indices[0] # 1位のインデックス
-                correspondences.append([i, best_idx.item()])
+        # 距離が閾値以下なら、対応点としてインデックスのペアを保存
+        if best_dist.item() < DISTANCE_THRESHOLD:
+            correspondences.append([i, best_idx.item()])
+
+print(f"マッチング完了。 {len(correspondences)} 個の対応点が見つかりました。")
 
 print(f"マッチング完了。 {len(correspondences)} 個の対応点が見つかりました。")
 
