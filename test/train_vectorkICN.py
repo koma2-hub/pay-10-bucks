@@ -44,17 +44,6 @@ class ContrastiveLoss(nn.Module):
         )
         return loss_contrastive
 
-class kICNDataset(Dataset):
-    def __init__(self, npz_path):
-        data = np.load(npz_path)
-        self.hist1 = torch.from_numpy(data['hist1'].astype(np.float32))
-        self.hist2 = torch.from_numpy(data['hist2'].astype(np.float32))
-        self.labels = torch.from_numpy(data['labels'].astype(np.float32))
-    def __len__(self):
-        return len(self.labels)
-    def __getitem__(self, idx):
-        return self.hist1[idx], self.hist2[idx], self.labels[idx]
-
 class VectorkICNDataset(Dataset):
     def __init__(self, npz_path):
         data = np.load(npz_path)
@@ -71,14 +60,14 @@ class VectorkICNDataset(Dataset):
 # ==============================================================================
 
 # ハイパーパラメータ
-epochs = 60
+epochs = 30
 lr = 0.0005
 batch_size = 32
-input_dim = 64      # ★実際のデータに合わせてください
-embedding_dim = 32  # ★調整可能なハイパーパラメータ
+input_dim = 32      # ★実際のデータに合わせてください
+embedding_dim = 16  # ★調整可能なハイパーパラメータ
 
 # 1. データセット全体をロード
-full_dataset = kICNDataset('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset/vector_dataset_16bins_64points_weaknoise768.npz')
+full_dataset = VectorkICNDataset('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset/vector_dataset_16bins_32points_weaknoise1536.npz')
 
 # 2. データセットを訓練用とテスト用に分割 (例: 80% 訓練, 20% テスト)
 train_size = int(0.8 * len(full_dataset))
@@ -112,10 +101,10 @@ print("\n--- 訓練開始 ---")
 model.train()
 for epoch in range(epochs):
     running_loss = 0.0
-    for hist1, hist2, labels_batch in train_dataloader: # ★訓練データローダーを使用
-        hist1, hist2, labels_batch = hist1.to(device), hist2.to(device), labels_batch.to(device)
+    for intensity1, intensity2, labels_batch in train_dataloader: # ★訓練データローダーを使用
+        intensity1, intensity2, labels_batch = intensity1.to(device), intensity2.to(device), labels_batch.to(device)
         optimizer.zero_grad()
-        output1, output2 = model(hist1, hist2)
+        output1, output2 = model(intensity1, intensity2)
         loss = criterion(output1, output2, labels_batch)
         loss.backward()
         optimizer.step()
@@ -131,13 +120,13 @@ print("--- 訓練完了 ---")
 plt.figure(figsize=(10, 5))
 epoch_range = range(1, epochs + 1)
 plt.plot(epoch_range, train_losses, marker='o', linestyle='-', label='Training Loss')
-plt.title('vector_64points_weaknoise768')
+plt.title('vector_32points_1536')
 plt.xlabel('Epochs')
 plt.ylabel('Loss')
 plt.xticks(epoch_range)
 plt.grid(True)
 plt.legend()
-plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/logs/vector_64points_weaknoise768_loss.png')
+plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/logs/vector_32points_1536_loss.png')
 plt.show()
 
 torch.save(model.state_dict(), 'vector_siamese_model.pth')
@@ -153,9 +142,9 @@ labels = []
 
 # テストデータローダーを使って距離とラベルを収集
 with torch.no_grad():
-    for hist1, hist2, label in test_dataloader: # ★テストデータローダーを使用
-        hist1, hist2 = hist1.to(device), hist2.to(device)
-        output1, output2 = model(hist1, hist2)
+    for intensity1, intensity2, label in test_dataloader: # ★テストデータローダーを使用
+        intensity1, intensity2 = intensity1.to(device), intensity2.to(device)
+        output1, output2 = model(intensity1, intensity2)
         euclidean_distance = F.pairwise_distance(output1, output2)
         distances.extend(euclidean_distance.cpu().numpy())
         labels.extend(label.cpu().numpy())
@@ -212,10 +201,10 @@ plt.hist(distances[labels == 0], bins=50, alpha=0.7, label='Negative Pairs (Diff
 # 最適な閾値を線で表示
 plt.axvline(best_threshold, color='red', linestyle='--', label=f'Best Threshold = {best_threshold:.2f}')
 plt.axvline(best_accuracy, label=f'Best Accuracy = {best_accuracy:.2f}')
-plt.title('vector_64points_weaknoise768')
+plt.title('vector_32points_1536')
 plt.xlabel('Euclidean Distance')
 plt.ylabel('Frequency')
 plt.legend()
 plt.grid(True)
-plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/logs/vector_64points_weaknoise768_distribution.png')
+plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/logs/vector_32points_1536_distribution.png')
 plt.show()
