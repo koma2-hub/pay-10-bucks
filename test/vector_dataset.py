@@ -74,9 +74,8 @@ data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
 file_names = os.listdir(data_path)
 dummy_pairs = []
 k = 32
-bins = 16
 
-for file in file_names:
+for i, file in enumerate(file_names):
     #print("file name:", file)
     file_path = os.path.join(data_path, file)
     pcd = load_ply(file_path)
@@ -103,6 +102,8 @@ for file in file_names:
     """
     #負のペア用にファイルをランダムにロード
     random_file_index = rng.integers(len(file_names))
+    while i == random_file_index:
+        random_file_index = rng.integers(len(file_names))
     random_file_path = os.path.join(data_path, file_names[random_file_index])
     random_pcd = load_ply(random_file_path)
     random_pcd_indices = knn(random_pcd, k = k)
@@ -145,7 +146,7 @@ intensity2_list = np.array([pair[1] for pair in dummy_pairs])
 labels_list = np.array([pair[2] for pair in dummy_pairs])
 
 # .npz 形式で圧縮して保存
-save_file = 'vector_dataset_' + str(bins) + 'bins_' + str(k) + 'points_' +'weaknoise'+ str(intensity1_list.shape[0]) + '.npz'
+save_file = 'vector_dataset_'  + str(k) + 'points_' +'noise005_'+ str(intensity1_list.shape[0]) + 'cr' + '.npz'
 save_path = os.path.join('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset', save_file)
 np.savez_compressed(
     save_path, 
