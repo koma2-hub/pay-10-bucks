@@ -106,7 +106,7 @@ for file in file_names:
     正例のペアを作成
     一つのplyファイルから4点ランダムに選びそれ周りの点群の輝度値を取得する
     """
-    for i in range(16):
+    for i in range(8):
         #サンプリングする点をランダムに選択
         sample_point = rng.integers(pcd.shape[0])
         #サンプリングする点の近傍点のindexを取得
@@ -117,7 +117,7 @@ for file in file_names:
         hist_data = create_intensity_histogram(pcd_intensity, bins=bins, density=True)
         #ヒストグラムの作成(ノイズ有)
         pcd_intensity_noise = np.copy(pcd_intensity)
-        pcd_intensity_noise = pcd_intensity_noise + np.random.normal(0, 0.01, k)
+        pcd_intensity_noise = pcd_intensity_noise + np.random.normal(0, 0.05, k)
         hist_data_noise = create_intensity_histogram(pcd_intensity_noise, bins=bins, density=True)
         #ヒストグラムをペアとして保存
         dummy_pairs.append((hist_data, hist_data_noise, 1))
@@ -131,7 +131,7 @@ for file in file_names:
     random_file_path = os.path.join(data_path, file_names[random_file_index])
     random_pcd = load_ply(random_file_path)
     random_pcd_indices = knn(random_pcd, k = k)
-    for i in range(16):
+    for i in range(8):
         #サンプリングする点をランダムに選択
         sample_point = rng.integers(pcd.shape[0])
         #サンプリングする点の近傍点のindexを取得
@@ -174,7 +174,7 @@ hist2_list = np.array([pair[1] for pair in dummy_pairs])
 labels_list = np.array([pair[2] for pair in dummy_pairs])
 
 # .npz 形式で圧縮して保存
-save_file = 'histogram_dataset_' + str(bins) + 'bins_' + str(k) + 'points_' + 'weaknoise' + str(hist1_list.shape[0]) + '.npz'
+save_file = 'histogram_dataset_' + str(bins) + 'bins_' + str(k) + 'points_' + 'noise005_' + str(hist1_list.shape[0]) + '.npz'
 save_path = os.path.join('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset', save_file)
 np.savez_compressed(
     save_path, 
