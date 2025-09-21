@@ -10,18 +10,63 @@ import matplotlib.pyplot as plt
 # A. 準備フェーズ (モデル、Datasetクラス、損失関数の定義)
 # ==============================================================================
 
+import torch
+import torch.nn as nn
+
 class SubNetwork(nn.Module):
-    def __init__(self, input_dim=32, embedding_dim=64):
+    """
+    A PointNet-like sub-network to process a local neighborhood of points.
+    Input: A tensor of shape (batch_size, k, 4), where k is the number of points.
+    Output: An embedding vector of shape (batch_size, embedding_dim).
+    """
+    def __init__(self, k=64, embedding_dim=64):
         super(SubNetwork, self).__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(input_dim, 128),
-            nn.ReLU(inplace=True),
-            nn.Linear(128, 128),
-            nn.ReLU(inplace=True),
-            nn.Linear(128, embedding_dim)
+        self.k = k
+        
+        # Shared MLP to process each point individually.
+        # We use 1D Convolutions which act as shared linear layers on point features.
+        # Input: (batch, 4, k_points) -> Output: (batch, 1024, k_points)
+        self.point_feature_extractor = nn.Sequential(
+            nn.Conv1d(4, 64, 1),      # 4 features (x,y,z,i) -> 64
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Conv1d(64, 128, 1),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Conv1d(128, 1024, 1),
+            nn.BatchNorm1d(1024),
         )
+
+        # Final MLP to produce the embedding from the global feature vector.
+        # Input: (batch, 1024) -> Output: (batch, embedding_dim)
+        self.embedding_generator = nn.Sequential(
+            nn.Linear(1024, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Linear(256, embedding_dim),
+        )
+
     def forward(self, x):
-        return self.fc(x)
+        # Input x shape: (batch_size, k, 4)
+        
+        # Transpose to fit Conv1d input: (batch_size, 4, k)
+        x = x.transpose(2, 1)
+
+        # 1. Extract high-dimensional features for each point
+        point_features = self.point_feature_extractor(x)
+        
+        # 2. Aggregate features with max pooling (symmetric function)
+        # This creates the global feature vector for the neighborhood.
+        # Shape: (batch_size, 1024)
+        global_feature = torch.max(point_features, dim=2)[0]
+
+        # 3. Generate the final embedding
+        embedding = self.embedding_generator(global_feature)
+        
+        return embedding
 
 class SiameseNetwork(nn.Module):
     def __init__(self, sub_network):
@@ -67,7 +112,7 @@ input_dim = 32      # ★実際のデータに合わせてください
 embedding_dim = 32  # ★調整可能なハイパーパラメータ
 
 # 1. データセット全体をロード
-full_dataset = VectorkICNDataset('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset/vector_dataset_32points_noise005_1536_labs_aplha.npz')
+full_dataset = VectorkICNDataset('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset/vector_dataset_32points_noise005_2064_labs_with_coord.npz')
 
 # 2. データセットを訓練用とテスト用に分割 (例: 80% 訓練, 20% テスト)
 train_size = int(0.8 * len(full_dataset))
@@ -89,7 +134,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"\nUsing device: {device}")
 
 # モデル、損失関数、オプティマイザの初期化
-sub_net = SubNetwork(input_dim=input_dim, embedding_dim=embedding_dim)
+sub_net = SubNetwork(k=input_dim, embedding_dim=embedding_dim)
 model = SiameseNetwork(sub_network=sub_net).to(device)
 criterion = ContrastiveLoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)

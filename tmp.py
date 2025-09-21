@@ -5,24 +5,7 @@ import fpsample
 from utils.data_utils import load_ply , knn
 
 <<<<<<< HEAD
-data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
-=======
-"""
-data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record/raw"
->>>>>>> ab8bd47 (trash files)
-file_names = os.listdir(data_path)
-print(len(file_names))
-
-<<<<<<< HEAD
-for i,file_path in enumerate(file_names):
-    print(i, file_path)
-
-=======
-pcd = load_ply("/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record/raw/robot_record0.ply")
-print(pcd.shape[0])
-"""
-
-def save_pcd(filename, pcd):
+def save_ply(filename, pcd):
     """
     点群データを PLY ファイルとして保存する関数。
     出力フォーマットは以下の通り:
@@ -78,17 +61,17 @@ def save_pcd(filename, pcd):
 
     # PLY ヘッダーの作成
     header = f"""ply
-                format ascii 1.0
-                element vertex {data.shape[0]}
-                property float32 x
-                property float32 y
-                property float32 z
-                property uint8 r
-                property uint8 g
-                property uint8 b
-                property float32 i
-                end_header
-                """
+format ascii 1.0
+element vertex {data.shape[0]}
+property float32 x
+property float32 y
+property float32 z
+property uint8 r
+property uint8 g
+property uint8 b
+property float32 i
+end_header
+"""
     # ファイルにヘッダーと各点のデータを書き出す
     with open(filename, "w") as f:
         f.write(header)
@@ -96,12 +79,32 @@ def save_pcd(filename, pcd):
             # 書式: x,y,z は小数点以下4桁、i は小数点以下2桁で出力
             f.write(f"{row[0]:.4f} {row[1]:.4f} {row[2]:.4f} {int(row[3])} {int(row[4])} {int(row[5])} {row[6]:.2f}\n")
 
-def downsample_pcd(pointcloud, downsample_point, intensity=False) -> np.ndarray:
-    if pointcloud.shape[0] < downsample_point:
-        downsample_point = pointcloud.shape[0]
-    fps_indices = fpsample.fps_sampling(pointcloud, downsample_point)
-    downsampled_pc = pointcloud[fps_indices][:, :4]
-    return downsampled_pc
+file_path = '/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/lab_room004.ply'
+pcd = load_ply('/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/lab_room003.ply')
 
-print(torch.cuda.is_available())
->>>>>>> ab8bd47 (trash files)
+save_ply(filename=file_path, pcd=pcd)
+
+
+
+    
+src = load_ply("/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/lab1.ply")
+tgt = load_ply("/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/lab2.ply")
+
+o3d_pcd_a.points = o3d.utility.Vector3dVector(src[:, :3])
+o3d_pcd_b.points = o3d.utility.Vector3dVector(tgt[:, :3])
+
+o3d_pcd_a.paint_uniform_color([0, 0.651, 0.929])
+o3d_pcd_b.paint_uniform_color([1, 0.706, 0])
+
+o3d.visualization.draw_geometries([o3d_pcd_a, o3d_pcd_b],
+                                    window_name="raw point cloud")
+
+
+=======
+k = 32
+array = np.zeros((k, 4))
+
+noise = np.random.normal(0, 0.05, k)
+array[:,-1] += noise
+print(array)
+>>>>>>> a789c21 (new dataset)

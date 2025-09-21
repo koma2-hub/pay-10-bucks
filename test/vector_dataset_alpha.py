@@ -70,14 +70,17 @@ class VectorPairDataset(Dataset):
         return intensity1, intensity2, label
     
 """ここで点群データを読み込み、近傍点探索を行う。"""
-data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
-file_names = os.listdir(data_path)
-dummy_pairs = []
-k = 64
+data_path1 = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
+data_path2 = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs_icn/raw"
+file_names1 = os.listdir(data_path1)
+file_names2 = os.listdir(data_path2)
 
-for i, file in enumerate(file_names):
+dummy_pairs = []
+k = 32
+
+for i, file in enumerate(file_names1):
     #print("file name:", file)
-    file_path = os.path.join(data_path, file)
+    file_path = os.path.join(data_path1, file)
     pcd = load_ply(file_path)
     indices = knn(pcd, k=k)
     rng = np.random.default_rng()
@@ -85,7 +88,7 @@ for i, file in enumerate(file_names):
     """
     正例のペアの作成
     """
-    for i in range(8):
+    for j in range(8):
         sample_point = rng.integers(pcd.shape[0])
         #近傍点の取得
         neighbor_indices = indices[sample_point]
@@ -100,15 +103,13 @@ for i, file in enumerate(file_names):
     """
     負例のペアの作成
     """
-    #負のペア用にファイルをランダムにロード
-    random_file_index = rng.integers(len(file_names))
-    while i == random_file_index:
-        random_file_index = rng.integers(len(file_names))
-    random_file_path = os.path.join(data_path, file_names[random_file_index])
-    random_pcd = load_ply(random_file_path)
-    random_pcd_indices = knn(random_pcd, k = k)
+    #負のペア用に異なるデータからファイルをロード
+    negative_file_index = rng.integers(len(file_names2))
+    negative_file_path = os.path.join(data_path2, file_names2[negative_file_index])
+    negative_pcd = load_ply(negative_file_path)
+    negative_pcd_indices = knn(negative_pcd, k = k)
     
-    for i in range(8):
+    for j in range(8):
         #サンプリングする点をランダムに選択
         sample_point = rng.integers(pcd.shape[0])
         #サンプリングする点の近傍点のindexを取得
@@ -117,14 +118,69 @@ for i, file in enumerate(file_names):
         pcd_intensity = pcd[neighbor_indices, -1]
 
         #負のペアのサンプリング点をランダムに選択
-        sample_point_negative = rng.integers(random_pcd.shape[0])
+        sample_point_negative = rng.integers(negative_pcd.shape[0])
         #サンプリングする点の近傍点のインデックスを取得
-        neighbor_indices_negative = random_pcd_indices[sample_point_negative]
+        neighbor_indices_negative = negative_pcd_indices[sample_point_negative]
         #サンプリングする点とその近傍点の輝度値を取得
-        pcd_intensity_negative = random_pcd[neighbor_indices_negative, -1]
+        pcd_intensity_negative = negative_pcd[neighbor_indices_negative, -1]
         
         #ヒストグラムを負のペアとして保存
         dummy_pairs.append((pcd_intensity, pcd_intensity_negative, 0))
+
+
+"""
+同じデータが含まれる可能性があるので後で変更する
+"""
+#別データからもデータセットを作成する
+for i, file in enumerate(file_names2):
+    #print("file name:", file)
+    file_path = os.path.join(data_path2, file)
+    pcd = load_ply(file_path)
+    indices = knn(pcd, k=k)
+    rng = np.random.default_rng()
+
+    """
+    正例のペアの作成
+    """
+    for j in range(8):
+        sample_point = rng.integers(pcd.shape[0])
+        #近傍点の取得
+        neighbor_indices = indices[sample_point]
+        #近傍点の輝度値の取得。ユークリッド距離をもとにソートされているはず
+        pcd_intensity = pcd[neighbor_indices, -1]
+        #正例のペアとしてノイズを加えた輝度値を取得
+        pcd_intensity_noise = np.copy(pcd_intensity)
+        pcd_intensity_noise = pcd_intensity_noise + np.random.normal(0, 0.05, k)
+        #データに加える
+        dummy_pairs.append((pcd_intensity, pcd_intensity_noise, 1))
+    
+    """
+    負例のペアの作成
+    """
+    #負のペア用に異なるデータからファイルをロード
+    negative_file_index = rng.integers(len(file_names1))
+    negative_file_path = os.path.join(data_path1, file_names1[negative_file_index])
+    negative_pcd = load_ply(negative_file_path)
+    negative_pcd_indices = knn(negative_pcd, k = k)
+    
+    for j in range(8):
+        #サンプリングする点をランダムに選択
+        sample_point = rng.integers(pcd.shape[0])
+        #サンプリングする点の近傍点のindexを取得
+        neighbor_indices = indices[sample_point]
+        #サンプリングする点とその近傍点の輝度値を取得
+        pcd_intensity = pcd[neighbor_indices, -1]
+
+        #負のペアのサンプリング点をランダムに選択
+        sample_point_negative = rng.integers(negative_pcd.shape[0])
+        #サンプリングする点の近傍点のインデックスを取得
+        neighbor_indices_negative = negative_pcd_indices[sample_point_negative]
+        #サンプリングする点とその近傍点の輝度値を取得
+        pcd_intensity_negative = negative_pcd[neighbor_indices_negative, -1]
+        
+        #ヒストグラムを負のペアとして保存
+        dummy_pairs.append((pcd_intensity, pcd_intensity_negative, 0))
+
 
 
 # データセットとデータローダーの作成
@@ -146,7 +202,7 @@ intensity2_list = np.array([pair[1] for pair in dummy_pairs])
 labels_list = np.array([pair[2] for pair in dummy_pairs])
 
 # .npz 形式で圧縮して保存
-save_file = 'vector_dataset_'  + str(k) + 'points_' +'noise005_'+ str(intensity1_list.shape[0]) + '.npz'
+save_file = 'vector_dataset_'  + str(k) + 'points_' +'noise005_'+ str(intensity1_list.shape[0]) + '_labs_aplha' + '.npz'
 save_path = os.path.join('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset', save_file)
 np.savez_compressed(
     save_path, 

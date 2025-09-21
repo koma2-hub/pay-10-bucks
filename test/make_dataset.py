@@ -420,22 +420,12 @@ bin_num = 64
 border = 0.6
 
 # モデルパス取得
-try:
-    model_paths = get_model_paths('variation5')
-    # この辞書アクセスが失敗するかもしれないので try-except
-    model_path = model_paths[(grid_size, bin_num)]
-except KeyError:
-    print(f"model_paths に指定のキー (grid_size={grid_size}, bin_num={bin_num}) がありません。")
-    sys.exit(1)
-except Exception as e:
-    print(f"model_paths 取得時にエラーが発生しました: {e}")
-    sys.exit(1)
+model_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/variation5/grid7_bin64/model/correlation_model.pth"
 
 #ダウンサンプリングするデータセットのパスを取得
-
-data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record/raw"
+data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs/raw"
 file_names = os.listdir(data_path)
-save_dir = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
+save_dir = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs/raw"
 
 
 for file in file_names:
