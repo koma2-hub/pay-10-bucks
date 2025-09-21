@@ -1,13 +1,14 @@
+import numpy as np
+import time
+import fpsample 
+import open3d as o3d
+from utils.data_utils import load_ply , farthest_point_sampling
 import os,sys
 sys.path.append(os.pardir)
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from utils.data_utils import load_ply
-import time
-import fpsample 
-import open3d as o3d
-
 
 
 # from plyfile import PlyData # .plyファイルを扱う場合の一例
@@ -70,12 +71,13 @@ class VectorPairDataset(Dataset):
         return intensity1, intensity2, label
     
 """ここで点群データを読み込み、近傍点探索を行う。"""
-data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
+data_path = "/mnt/c/Users/komatsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
 file_names = os.listdir(data_path)
 dummy_pairs = []
 k = 64
+bins = 16
 
-for i, file in enumerate(file_names):
+for file in file_names:
     #print("file name:", file)
     file_path = os.path.join(data_path, file)
     pcd = load_ply(file_path)
@@ -85,16 +87,16 @@ for i, file in enumerate(file_names):
     """
     正例のペアの作成
     """
-    for i in range(8):
+    for i in range(4):
         sample_point = rng.integers(pcd.shape[0])
-        #近傍点の取得
         neighbor_indices = indices[sample_point]
-        #近傍点の輝度値の取得。ユークリッド距離をもとにソートされているはず
+        #print("sample_point:", sample_point)
+        #print("neighbor points:", neighbor_indices)
         pcd_intensity = pcd[neighbor_indices, -1]
-        #正例のペアとしてノイズを加えた輝度値を取得
+        #print("intensity:", pcd_intensity)
         pcd_intensity_noise = np.copy(pcd_intensity)
         pcd_intensity_noise = pcd_intensity_noise + np.random.normal(0, 0.05, k)
-        #データに加える
+
         dummy_pairs.append((pcd_intensity, pcd_intensity_noise, 1))
     
     """
@@ -102,13 +104,10 @@ for i, file in enumerate(file_names):
     """
     #負のペア用にファイルをランダムにロード
     random_file_index = rng.integers(len(file_names))
-    while i == random_file_index:
-        random_file_index = rng.integers(len(file_names))
     random_file_path = os.path.join(data_path, file_names[random_file_index])
     random_pcd = load_ply(random_file_path)
     random_pcd_indices = knn(random_pcd, k = k)
-    
-    for i in range(8):
+    for i in range(4):
         #サンプリングする点をランダムに選択
         sample_point = rng.integers(pcd.shape[0])
         #サンプリングする点の近傍点のindexを取得
@@ -138,6 +137,7 @@ print("Batch of Intensity 1 Shape:", intensity1_batch.shape)
 print("Batch of Intensity 2 Shape:", intensity2_batch.shape)
 print("Batch of Labels Shape:", labels_batch.shape)
 
+# dummy_pairs = [(hist1, hist2, label), ...]
 
 # データをNumPy配列に変換
 # 扱いやすいように、hist1, hist2, labelsで別々の配列にまとめます
@@ -146,8 +146,8 @@ intensity2_list = np.array([pair[1] for pair in dummy_pairs])
 labels_list = np.array([pair[2] for pair in dummy_pairs])
 
 # .npz 形式で圧縮して保存
-save_file = 'vector_dataset_'  + str(k) + 'points_' +'noise005_'+ str(intensity1_list.shape[0]) + '.npz'
-save_path = os.path.join('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset', save_file)
+save_file = 'vector_dataset_' + str(bins) + 'bins_' + str(k) + 'points_' + 'weaknoise' + str(intensity1_list.shape[0]) + '.npz'
+save_path = os.path.join('/mnt/c/Users/komatsu/SICK/pay-10-bucks/kICN_Dataset', save_file)
 np.savez_compressed(
     save_path, 
     intensity1=intensity1_list,

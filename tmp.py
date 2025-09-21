@@ -4,6 +4,7 @@ import torch
 import fpsample
 from utils.data_utils import load_ply , knn
 
+<<<<<<< HEAD
 def save_ply(filename, pcd):
     """
     点群データを PLY ファイルとして保存する関数。
@@ -99,3 +100,11 @@ o3d.visualization.draw_geometries([o3d_pcd_a, o3d_pcd_b],
                                     window_name="raw point cloud")
 
 
+=======
+k = 32
+array = np.zeros((k, 4))
+
+noise = np.random.normal(0, 0.05, k)
+array[:,-1] += noise
+print(array)
+>>>>>>> a789c21 (new dataset)
