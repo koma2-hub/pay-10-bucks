@@ -11,14 +11,16 @@ import matplotlib.pyplot as plt
 # ==============================================================================
 
 class SubNetwork(nn.Module):
-    def __init__(self, input_dim=32, embedding_dim=64):
+    def __init__(self, input_dim=32, output_dim=64):
         super(SubNetwork, self).__init__()
         self.fc = nn.Sequential(
-            nn.Linear(input_dim, 128),
+            nn.Linear(input_dim, 64),
             nn.ReLU(inplace=True),
-            nn.Linear(128, 128),
+            nn.Linear(64, 32),
             nn.ReLU(inplace=True),
-            nn.Linear(128, embedding_dim)
+            nn.Linear(32, 32),
+            nn.ReLU(inplace=True),
+            nn.Linear(32, output_dim)
         )
     def forward(self, x):
         return self.fc(x)
@@ -63,11 +65,15 @@ class VectorkICNDataset(Dataset):
 epochs = 30
 lr = 0.0005
 batch_size = 32
-input_dim = 32      # ★実際のデータに合わせてください
-embedding_dim = 32  # ★調整可能なハイパーパラメータ
+input_dim = 64   # ★実際のデータに合わせてください
+output_dim = 64  # ★調整可能なハイパーパラメータ
 
 # 1. データセット全体をロード
+<<<<<<< HEAD
 full_dataset = VectorkICNDataset('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset/vector_dataset_32points_noise005_1536_labs_aplha.npz')
+=======
+full_dataset = VectorkICNDataset('/mnt/c/Users/komatsu/SICK/pay-10-bucks/kICN_Dataset/vector_dataset_64points_noise005_1536alpha.npz')
+>>>>>>> f7c131d (tmp)
 
 # 2. データセットを訓練用とテスト用に分割 (例: 80% 訓練, 20% テスト)
 train_size = int(0.8 * len(full_dataset))
@@ -89,7 +95,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"\nUsing device: {device}")
 
 # モデル、損失関数、オプティマイザの初期化
-sub_net = SubNetwork(input_dim=input_dim, embedding_dim=embedding_dim)
+sub_net = SubNetwork(input_dim=input_dim, output_dim=output_dim)
 model = SiameseNetwork(sub_network=sub_net).to(device)
 criterion = ContrastiveLoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -120,17 +126,29 @@ print("--- 訓練完了 ---")
 plt.figure(figsize=(10, 5))
 epoch_range = range(1, epochs + 1)
 plt.plot(epoch_range, train_losses, marker='o', linestyle='-', label='Training Loss')
+<<<<<<< HEAD
 plt.title('vector_64points_noise005_1536_labs_aplha')
+=======
+plt.title('vector_64points_noise005_1536_alpha')
+>>>>>>> f7c131d (tmp)
 plt.xlabel('Epochs')
 plt.ylabel('Loss')
 plt.xticks(epoch_range)
 plt.grid(True)
 plt.legend()
+<<<<<<< HEAD
 plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/logs/vector_64points_noise005_1536_labs_aplha_epoch30_loss.png')
 plt.show()
 
 torch.save(model.state_dict(), '/mnt/c/Users/matsu/SICK/pay-10-bucks/models/vector_siamese_model_64points_noise005_1536_labs_aplha_epoch30.pth')
 print("モデルを '/mnt/c/Users/matsu/SICK/pay-10-bucks/models/vector_siamese_model_64points_noise005_1536_labs_aplha_epoch30.pth' として保存しました。")
+=======
+plt.savefig('/mnt/c/Users/komatsu/SICK/pay-10-bucks/logs/vector_64points_noise005_1536_alpha_loss.png')
+plt.show()
+
+torch.save(model.state_dict(), '/mnt/c/Users/komatsu/SICK/pay-10-bucks/models/vector_siamese_model_alpha.pth')
+print("モデルを '/mnt/c/Users/komatsu/SICK/pay-10-bucks/models/vector_siamese_model_alpha.pth' として保存しました。")
+>>>>>>> f7c131d (tmp)
 # ==============================================================================
 # D. 評価フェーズ
 # ==============================================================================
@@ -201,10 +219,18 @@ plt.hist(distances[labels == 0], bins=50, alpha=0.7, label='Negative Pairs (Diff
 # 最適な閾値を線で表示
 plt.axvline(best_threshold, color='red', linestyle='--', label=f'Best Threshold = {best_threshold:.2f}')
 plt.axvline(best_accuracy, label=f'Best Accuracy = {best_accuracy:.2f}')
+<<<<<<< HEAD
 plt.title('vector_64points_noise005_1536_labs_aplha')
+=======
+plt.title('vector_64points_noise005_1536_alpha')
+>>>>>>> f7c131d (tmp)
 plt.xlabel('Euclidean Distance')
 plt.ylabel('Frequency')
 plt.legend()
 plt.grid(True)
+<<<<<<< HEAD
 plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/logs/vector_64points_noise005_1536_labs_aplha_epoch30_distribution.png')
+=======
+plt.savefig('/mnt/c/Users/komatsu/SICK/pay-10-bucks/logs/vector_64points_noise005_1536_alpha_distribution.png')
+>>>>>>> f7c131d (tmp)
 plt.show()

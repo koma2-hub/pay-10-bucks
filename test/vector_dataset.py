@@ -70,7 +70,7 @@ class VectorPairDataset(Dataset):
         return intensity1, intensity2, label
     
 """ここで点群データを読み込み、近傍点探索を行う。"""
-data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
+data_path = "/mnt/c/Users/komatsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
 file_names = os.listdir(data_path)
 dummy_pairs = []
 k = 64
@@ -85,7 +85,7 @@ for i, file in enumerate(file_names):
     """
     正例のペアの作成
     """
-    for i in range(8):
+    for i in range(4):
         sample_point = rng.integers(pcd.shape[0])
         #近傍点の取得
         neighbor_indices = indices[sample_point]
@@ -108,7 +108,7 @@ for i, file in enumerate(file_names):
     random_pcd = load_ply(random_file_path)
     random_pcd_indices = knn(random_pcd, k = k)
     
-    for i in range(8):
+    for i in range(4):
         #サンプリングする点をランダムに選択
         sample_point = rng.integers(pcd.shape[0])
         #サンプリングする点の近傍点のindexを取得
@@ -146,8 +146,13 @@ intensity2_list = np.array([pair[1] for pair in dummy_pairs])
 labels_list = np.array([pair[2] for pair in dummy_pairs])
 
 # .npz 形式で圧縮して保存
+<<<<<<< HEAD
 save_file = 'vector_dataset_'  + str(k) + 'points_' +'noise005_'+ str(intensity1_list.shape[0]) + '.npz'
 save_path = os.path.join('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset', save_file)
+=======
+save_file = 'vector_dataset_'  + str(k) + 'points_' +'noise005_'+ str(intensity1_list.shape[0]) + 'cr' + '.npz'
+save_path = os.path.join('/mnt/c/Users/komatsu/SICK/pay-10-bucks/kICN_Dataset', save_file)
+>>>>>>> f7c131d (tmp)
 np.savez_compressed(
     save_path, 
     intensity1=intensity1_list,

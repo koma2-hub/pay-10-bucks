@@ -1,9 +1,17 @@
+import os,sys
+sys.path.append(os.pardir)
+import numpy as np
+import torch
+from torch.utils.data import Dataset, DataLoader
+from utils.data_utils import load_ply
+import open3d as o3d
 import os 
 import numpy as np
 import torch
 import fpsample
 from utils.data_utils import load_ply , knn
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 def save_ply(filename, pcd):
     """
@@ -21,32 +29,22 @@ def save_ply(filename, pcd):
       - x, y, z: 小数点以下4桁まで
       - r, g, b: 整数 (常に 0)
       - i: 小数点以下2桁まで
+=======
+>>>>>>> f7c131d (tmp)
 
-    例:
-      -1334.0197 -1060.7484 1785.6458 0 0 0 0.16
 
-    入力:
-      pcd: (N,3) または (N,4) の numpy 配列または torch.Tensor
-           4列目が存在する場合は intensity として使用、なければ 0 とする。
-    """
-    # Noneチェック
-    if pcd is None:
-        print(f"保存対象が None のためスキップします: {filename}")
-        return
-
-    # torch.Tensor の場合は numpy 配列に変換
-    if isinstance(pcd, torch.Tensor):
-        pcd_np = pcd.cpu().numpy()
-    else:
-        pcd_np = np.asarray(pcd)
-
-    # 入力の形状チェック (N,3) または (N,4)
-    if pcd_np.ndim != 2 or pcd_np.shape[1] not in (3, 4):
-        raise ValueError("pcd は (N,3) または (N,4) の形状である必要があります。")
-
-    # 座標は float32 として取得
-    xyz = pcd_np[:, :3].astype(np.float32)
+class VectorkICNDataset(Dataset):
+    def __init__(self, npz_path):
+        data = np.load(npz_path)
+        self.intensity1 = torch.from_numpy(data['intensity1'].astype(np.float32))
+        self.intensity2 = torch.from_numpy(data['intensity2'].astype(np.float32))
+        self.labels = torch.from_numpy(data['labels'].astype(np.float32))
+    def __len__(self):
+        return len(self.labels)
+    def __getitem__(self, idx):
+        return self.intensity1[idx], self.intensity2[idx], self.labels[idx]
     
+<<<<<<< HEAD
     # intensity の取得: 4列目があればその値、なければ 0
     if pcd_np.shape[1] == 4:
         intensity = pcd_np[:, 3].astype(np.float32).reshape(-1, 1)
@@ -108,3 +106,7 @@ noise = np.random.normal(0, 0.05, k)
 array[:,-1] += noise
 print(array)
 >>>>>>> a789c21 (new dataset)
+=======
+for i in range(100):
+    print(np.random.normal(0, 0.05, 100))
+>>>>>>> f7c131d (tmp)

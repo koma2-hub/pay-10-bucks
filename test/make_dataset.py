@@ -183,7 +183,7 @@ def compute_correlations(src_hist, tgt_hist, model, grid_size, border, device, s
                 hist_2_points = tgt_window_points[idy]
 
                 # 窓のポイント数の差を考慮して重みをかける
-                diff_points = min(hist_1_points, hist_2_points) / np.abs(hist_1_points - hist_2_points) + 1e-6
+                diff_points = min(hist_1_points, hist_2_points) / (np.abs(hist_1_points - hist_2_points) + 1e-6)
                 if diff_points >= 1:
                     diff_points = 1
 
