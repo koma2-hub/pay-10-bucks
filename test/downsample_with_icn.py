@@ -410,8 +410,8 @@ def downsample_pcd(pointcloud, downsample_point, intensity=False) -> np.ndarray:
 # 実際のスクリプト実行部
 # -----------------------------
 # 例: 
-SRC_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/lab1.ply'
-TGT_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/lab2.ply'
+SRC_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/test_src1.ply'
+TGT_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/test_tgt1.ply'
 grid_size = 7
 overlap = 0.5
 threshold = 100
@@ -473,12 +473,12 @@ visualize_and_save_results(
 )
 """
 
-save_ply(filename='/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/src_icn.ply' ,pcd=src_icn)
-save_ply(filename='/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/tgt_icn.ply', pcd=tgt_icn)
+save_ply(filename='/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/test_src1_icn.ply' ,pcd=src_icn)
+save_ply(filename='/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/test_tgt1_icn.ply', pcd=tgt_icn)
 
 src_icn_fps = downsample_pcd(src_icn, 1024, intensity=True)
 tgt_icn_fps = downsample_pcd(tgt_icn, 1024, intensity=True)
 
-save_ply(filename='/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/src_icn_fps.ply', pcd=src_icn_fps)
-save_ply(filename='/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/tgt_icn_fps.ply', pcd=tgt_icn_fps)
+save_ply(filename='/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/test_src1_icn_fps.ply', pcd=src_icn_fps)
+save_ply(filename='/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/test_tgt1_icn_fps.ply', pcd=tgt_icn_fps)
 

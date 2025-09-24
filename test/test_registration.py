@@ -114,12 +114,12 @@ def compute_descriptors(pcd, indices, bins):
 
 # --- パラメータ設定 ---
 # ファイルパス
-PCD_A_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/lab1_icn_fps.ply'  # ★ソース点群ファイルのパスに修正してください
-PCD_B_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/lab2_icn_fps.ply'  # ★ターゲット点群ファイルのパスに修正してください
-MODEL_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_model/siamese_model.pth' # ★学習済みモデルのパス
+PCD_A_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/src_icn_fps.ply'  # ★ソース点群ファイルのパスに修正してください
+PCD_B_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/tgt_icn_fps.ply'  # ★ターゲット点群ファイルのパスに修正してください
+MODEL_PATH = '//mnt/c/Users/matsu/SICK/pay-10-bucks/models/vector_siamese_model_64points_noise005_2048_alpha_epoch30.pth' # ★学習済みモデルのパス
 
 # モデルのパラメータ
-INPUT_DIM = 16      # ★訓練時のbinsと同じ値
+INPUT_DIM = 64      # ★訓練時のbinsと同じ値
 EMBEDDING_DIM = 32  # ★訓練時と同じ値
 
 # 特徴記述子のパラメータ
@@ -127,7 +127,7 @@ K_NEIGHBORS = 64        # ★データセット作成時のkと同じ値
 HIST_BINS = INPUT_DIM   # モデルの入力次元と一致させる
 
 # マッチングのパラメータ
-DISTANCE_THRESHOLD = 0.90 # ★評価で見つけた最適な値を基準に調整
+DISTANCE_THRESHOLD = 0.82 # ★評価で見つけた最適な値を基準に調整
 
 # --- デバイス設定 ---
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

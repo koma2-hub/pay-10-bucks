@@ -63,11 +63,11 @@ class VectorkICNDataset(Dataset):
 epochs = 30
 lr = 0.0005
 batch_size = 32
-input_dim = 32      # ★実際のデータに合わせてください
-embedding_dim = 32  # ★調整可能なハイパーパラメータ
+input_dim = 64      # ★実際のデータに合わせてください
+embedding_dim = 16  # ★調整可能なハイパーパラメータ
 
 # 1. データセット全体をロード
-full_dataset = VectorkICNDataset('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset/vector_dataset_32points_noise005_1536_labs_aplha.npz')
+full_dataset = VectorkICNDataset('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset/vector_dataset_64points_noise005_2112_fps.npz')
 
 # 2. データセットを訓練用とテスト用に分割 (例: 80% 訓練, 20% テスト)
 train_size = int(0.8 * len(full_dataset))
@@ -120,17 +120,17 @@ print("--- 訓練完了 ---")
 plt.figure(figsize=(10, 5))
 epoch_range = range(1, epochs + 1)
 plt.plot(epoch_range, train_losses, marker='o', linestyle='-', label='Training Loss')
-plt.title('vector_64points_noise005_1536_labs_aplha')
+plt.title('vector_64points_noise005_2112_fps')
 plt.xlabel('Epochs')
 plt.ylabel('Loss')
 plt.xticks(epoch_range)
 plt.grid(True)
 plt.legend()
-plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/logs/vector_64points_noise005_1536_labs_aplha_epoch30_loss.png')
+plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/logs/vector_64points_noise005_2112_fps_epoch30_loss.png')
 plt.show()
 
-torch.save(model.state_dict(), '/mnt/c/Users/matsu/SICK/pay-10-bucks/models/vector_siamese_model_64points_noise005_1536_labs_aplha_epoch30.pth')
-print("モデルを '/mnt/c/Users/matsu/SICK/pay-10-bucks/models/vector_siamese_model_64points_noise005_1536_labs_aplha_epoch30.pth' として保存しました。")
+torch.save(model.state_dict(), '/mnt/c/Users/matsu/SICK/pay-10-bucks/models/vector_siamese_model_64points_noise005_2112_fps_epoch30.pth')
+print("モデルを '/mnt/c/Users/matsu/SICK/pay-10-bucks/models/vector_siamese_model_64points_noise005_2112_fps_epoch30.pth' として保存しました。")
 # ==============================================================================
 # D. 評価フェーズ
 # ==============================================================================
@@ -152,36 +152,47 @@ with torch.no_grad():
 distances = np.array(distances)
 labels = np.array(labels)
 
-positive_samples = np.sum(labels == 1)
-negative_samples = np.sum(labels == 0)
-print(f"\n--- テストデータのラベル分布 ---")
-print(f"正例 (同じペア) の数: {positive_samples}")
-print(f"負例 (違うペア) の数: {negative_samples}\n")
+# --- ★ここからが変更箇所です ---
 
-# 最適な閾値を探索
-thresholds = np.arange(0, 4.0, 0.01) # 閾値の範囲と刻み幅
+# 最適な閾値を見つけるための変数を初期化
 best_accuracy = 0
 best_threshold = 0
+best_metrics = {}
 
-print("\n--- 閾値ごとの正解率 ---")
-print(" Threshold | Accuracy")
-print("-----------|-----------")
+# 閾値の候補を生成
+thresholds = np.arange(0, 4.0, 0.01)
+
+# テストデータに含まれる正例と負例の総数を事前に計算
+total_positives = np.sum(labels == 1)
+total_negatives = np.sum(labels == 0)
+
+print("\n--- 閾値ごとの詳細な性能指標 ---")
+print(f"テストデータ総数: {len(labels)} (正例: {total_positives}, 負例: {total_negatives})")
+print("-" * 60)
+print(" Threshold | Accuracy  |    TP    |    TN    |    FP    |    FN")
+print("-----------|-----------|----------|----------|----------|-=-------")
 
 for threshold in thresholds:
-    # 閾値に基づいて予測 (距離 < 閾値なら1 (同じ), そうでなければ0 (違う))
+    # 現在の閾値で予測を計算
     predictions = (distances < threshold).astype(int)
     
-    # 正解率を計算
+    # 各指標を計算
     accuracy = np.mean(predictions == labels)
+    TP = np.sum((predictions == 1) & (labels == 1))/(len(labels))*100
+    TN = np.sum((predictions == 0) & (labels == 0))/(len(labels))*100
+    FP = np.sum((predictions == 1) & (labels == 0))/(len(labels))*100
+    FN = np.sum((predictions == 0) & (labels == 1))/(len(labels))*100
     
-    # 各閾値とそれに対応する正解率を表示
-    print(f" {threshold:9.2f} | {accuracy * 100:6.2f}%")
+    # 現在の閾値での結果を表示
+    print(f" {threshold:9.2f} | {accuracy * 100:8.2f}% | {TP:8.2f} | {TN:8.2f} | {FP:8.2f} | {FN:8.2f}")
     
-    # 最高の正解率を更新していれば、記録する
+    # 最高の正解率を更新
     if accuracy > best_accuracy:
         best_accuracy = accuracy
         best_threshold = threshold
+        best_metrics = {'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN}
 
+print("-" * 60)
 
 # 最終的な結果の出力
 print("\n--- モデル評価最終結果 ---")
@@ -201,10 +212,10 @@ plt.hist(distances[labels == 0], bins=50, alpha=0.7, label='Negative Pairs (Diff
 # 最適な閾値を線で表示
 plt.axvline(best_threshold, color='red', linestyle='--', label=f'Best Threshold = {best_threshold:.2f}')
 plt.axvline(best_accuracy, label=f'Best Accuracy = {best_accuracy:.2f}')
-plt.title('vector_64points_noise005_1536_labs_aplha')
+plt.title('vector_64points_noise005_2112_fps')
 plt.xlabel('Euclidean Distance')
 plt.ylabel('Frequency')
 plt.legend()
 plt.grid(True)
-plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/logs/vector_64points_noise005_1536_labs_aplha_epoch30_distribution.png')
+plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/logs/vector_64points_noise005_2112_fps_epoch30_distribution.png')
 plt.show()

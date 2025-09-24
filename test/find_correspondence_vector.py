@@ -1,3 +1,6 @@
+import os,sys
+sys.path.append(os.pardir)
+from utils.data_utils import random_transform
 import open3d as o3d
 import numpy as np
 import torch
@@ -86,17 +89,18 @@ class SiameseNetwork(nn.Module):
 # (ご自身のコードから引用)
 SRC_PATH = "/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/src_icn_fps.ply"
 TGT_PATH = "/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/tgt_icn_fps.ply"
-MODEL_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/models/vector_siamese_model.pth'
+MODEL_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/models/vector_siamese_model_32points_noise005_2048_alphacr_epoch30.pth'
 
 K_NEIGHBORS = 32
 #近傍点の個数と一致
 INPUT_DIM = 32
 EMBEDDING_DIM = 32
-DISTANCE_THRESHOLD = 0.2
+DISTANCE_THRESHOLD = 0.1
 
 # --- データ読み込みと記述子計算 ---
 print("Loading point clouds and computing descriptors...")
 src_icn_fps = load_ply(SRC_PATH)
+#tgt_icn_fps = random_transform(src_icn_fps)
 tgt_icn_fps = load_ply(TGT_PATH)
 
 src_knn = knn(src_icn_fps, k=K_NEIGHBORS)
@@ -142,37 +146,48 @@ model.load_state_dict(torch.load(MODEL_PATH))
 model.to(device)
 model.eval()
 
-# --- ★★★【修正箇所】Ratio Testを導入した効率的なマッチング処理 ★★★ ---
-print("Matching descriptors using the trained model with Ratio Test...")
-# (NumPy配列をTorchテンソルに変換する部分は同じ)
+
 src_vector_tensor = torch.from_numpy(src_vector).to(device)
 tgt_vector_tensor = torch.from_numpy(tgt_vector).to(device)
 print(src_vector_tensor)
 print(tgt_vector_tensor)
 
+# --- ★★★【修正箇所】相互最近傍チェックを導入したマッチング処理 ★★★ ---
+print("Matching descriptors using the trained model with Mutual Nearest Neighbor Check...")
 correspondences = []
-# Ratio Testのための閾値
-RATIO_THRESHOLD = 0.8 # この値は0.7～0.8あたりで調整します
-
 with torch.no_grad():
     # 全てのヒストグラムを一度にモデルに通し、特徴ベクトル（Embedding）を計算
-    # model.sub_network を直接使うことで、SiameseNetworkのforwardを2回呼ぶ無駄を省く
     emb_src = model.sub_network(src_vector_tensor)
     emb_tgt = model.sub_network(tgt_vector_tensor)
 
-    # ソース点群の各点について、ターゲット点群で最も近い点を探す
-    for i in range(len(emb_src)):
-        # i番目のソース特徴ベクトルと、全てのターゲット特徴ベクトルとの距離を計算
-        distances = F.pairwise_distance(emb_src[i].unsqueeze(0), emb_tgt)
-        
-        # 最も距離が近い点のインデックスと、その距離を取得
-        best_dist, best_idx = torch.min(distances, dim=0)
-        
-        # 距離が閾値以下なら、対応点としてインデックスのペアを保存
-        if best_dist.item() < DISTANCE_THRESHOLD:
-            correspondences.append([i, best_idx.item()])
+    # 全てのソース特徴ベクトルとターゲット特徴ベクトル間の距離行列を計算
+    # dist_matrix[i, j] は emb_src[i] と emb_tgt[j] の距離
+    dist_matrix = torch.cdist(emb_src, emb_tgt)
 
-print(f"マッチング完了。 {len(correspondences)} 個の対応点が見つかりました。")
+    # --- ステップ1: 順方向の探索 (ソース -> ターゲット) ---
+    # 各ソース点(行)について、最も距離が近いターゲット点(列)のインデックスと距離を取得
+    best_dist_s2t, best_idx_s2t = torch.min(dist_matrix, dim=1)
+
+    # --- ステップ2: 逆方向の探索 (ターゲット -> ソース) ---
+    # 各ターゲット点(列)について、最も距離が近いソース点(行)のインデックスを取得
+    _ , best_idx_t2s = torch.min(dist_matrix, dim=0)
+
+    # --- ステップ3: 相互チェック ---
+    for i in range(len(emb_src)):
+        # ソース点 i にとってのベストマッチは、ターゲット点の best_idx_s2t[i]
+        best_tgt_idx = best_idx_s2t[i].item()
+        
+        # そのターゲット点 best_tgt_idx にとってのベストマッチが、
+        # ソース点 i 自身であるかを確認
+        if best_idx_t2s[best_tgt_idx].item() == i:
+            # 相互のベストマッチであることが確認できた！
+            
+            # さらに、その距離が閾値以下であることも確認（オプションだが推奨）
+            if best_dist_s2t[i].item() < DISTANCE_THRESHOLD:
+                correspondences.append([i, best_tgt_idx])
+
+print(f"マッチング完了。 {len(correspondences)} 個の信頼性の高い1対1対応点が見つかりました。")
+# (この後の可視化コードは変更ありません)
 
 
 # ==============================================================================

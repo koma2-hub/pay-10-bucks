@@ -73,7 +73,7 @@ class VectorPairDataset(Dataset):
 data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
 file_names = os.listdir(data_path)
 dummy_pairs = []
-k = 64
+k = 32
 
 for i, file in enumerate(file_names):
     #print("file name:", file)
