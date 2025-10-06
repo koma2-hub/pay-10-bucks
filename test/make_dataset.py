@@ -423,9 +423,9 @@ border = 0.6
 model_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/variation5/grid7_bin64/model/correlation_model.pth"
 
 #ダウンサンプリングするデータセットのパスを取得
-data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs/raw"
+data_path = "/mnt/d/LaTeX/Seminar/1006/ply/"
 file_names = os.listdir(data_path)
-save_dir = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs/raw"
+save_dir = "/mnt/d/LaTeX/Seminar/1006/ply/"
 
 
 for file in file_names:
@@ -442,7 +442,7 @@ for file in file_names:
     window_coords1, window_coords2) = process_point_clouds(
     src_pcd, tgt_dummy, model_path, grid_size, threshold, bin_num, overlap, border
     )
-    src_icn_fps = downsample_pcd(src_icn, 1024)
+    src_icn_fps = downsample_pcd(src_icn, 4096)
     new_file = "icn1024_" + file
     save_path = os.path.join(save_dir, new_file)
     save_pcd(save_path, src_icn_fps)

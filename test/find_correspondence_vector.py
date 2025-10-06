@@ -87,15 +87,15 @@ class SiameseNetwork(nn.Module):
 
 # --- パラメータ設定 ---
 # (ご自身のコードから引用)
-SRC_PATH = "/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/src_icn_fps.ply"
-TGT_PATH = "/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/tgt_icn_fps.ply"
-MODEL_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/models/vector_siamese_model_32points_noise005_2048_alphacr_epoch30.pth'
+SRC_PATH = "/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/lab1_icn_fps.ply"
+TGT_PATH = "/mnt/c/Users/matsu/SICK/pay-10-bucks/test_data/lab2_icn_fps.ply"
+MODEL_PATH = '/mnt/c/Users/matsu/SICK/pay-10-bucks/models/vector_siamese_model_32points_noise005_2064_epoch30.pth'
 
 K_NEIGHBORS = 32
 #近傍点の個数と一致
 INPUT_DIM = 32
 EMBEDDING_DIM = 32
-DISTANCE_THRESHOLD = 0.1
+DISTANCE_THRESHOLD = 0.08
 
 # --- データ読み込みと記述子計算 ---
 print("Loading point clouds and computing descriptors...")
@@ -230,7 +230,7 @@ if len(correspondences) > 3: # RANSACは最低3つの対応点を必要としま
     
     # --- RANSACによる位置合わせの実行 ---
     # 距離の閾値 (この距離内にある対応点をインライアとみなす)
-    ransac_distance_threshold = 0.1  # ★点群のスケールに合わせて調整してください (例: 2cm)
+    ransac_distance_threshold = 2  # ★点群のスケールに合わせて調整してください (例: 2cm)
 
     result_ransac = o3d.pipelines.registration.registration_ransac_based_on_correspondence(
         source=pcd_a_xyz,

@@ -69,14 +69,21 @@ class VectorPairDataset(Dataset):
             
         return intensity1, intensity2, label
     
+"""ノイズ生成用の関数"""
+def generate_noise(min, max, step, num):
+    num_steps = int((max - min) / step) + 1
+    random_integer = np.random.randint(0, num_steps, num)
+    result = min + random_integer*step
+    return result
+   
 """ここで点群データを読み込み、近傍点探索を行う。"""
-data_path1 = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_fps/raw"
-data_path2 = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs_fps/raw"
+data_path1 = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
+data_path2 = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs_icn/raw"
 file_names1 = os.listdir(data_path1)
 file_names2 = os.listdir(data_path2)
 
 dummy_pairs = []
-k = 64
+k = 32
 
 for i, file in enumerate(file_names1):
     #print("file name:", file)
@@ -92,11 +99,13 @@ for i, file in enumerate(file_names1):
         sample_point = rng.integers(pcd.shape[0])
         #近傍点の取得
         neighbor_indices = indices[sample_point]
+        print(sample_point)
+        print(neighbor_indices)
         #近傍点の輝度値の取得。ユークリッド距離をもとにソートされているはず
         pcd_intensity = pcd[neighbor_indices, -1]
         #正例のペアとしてノイズを加えた輝度値を取得
         pcd_intensity_noise = np.copy(pcd_intensity)
-        pcd_intensity_noise += np.random.normal(0, 0.05, k)
+        pcd_intensity_noise += generate_noise(-0.05, 0.05, 0.01, k)
         #輝度値が負になっている可能性があるので0か最大値を返すようにする
         pcd_intensity_noise = np.maximum(0, pcd_intensity_noise)
         #print(pcd_intensity_noise)
@@ -155,7 +164,7 @@ for i, file in enumerate(file_names2):
         pcd_intensity = pcd[neighbor_indices, -1]
         #正例のペアとしてノイズを加えた輝度値を取得
         pcd_intensity_noise = np.copy(pcd_intensity)
-        pcd_intensity_noise = pcd_intensity_noise + np.random.normal(0, 0.05, k)
+        pcd_intensity_noise += generate_noise(-0.05, 0.05, 0.01, k)
         #輝度値が負になっている場合は0とする
         pcd_intensity_noise = np.maximum(0, pcd_intensity_noise)
         #データに加える
@@ -186,9 +195,10 @@ for i, file in enumerate(file_names2):
         neighbor_indices_negative = negative_pcd_indices[sample_point_negative]
         #サンプリングする点とその近傍点の輝度値を取得
         pcd_intensity_negative = negative_pcd[neighbor_indices_negative, -1]
-        
+
         #ヒストグラムを負のペアとして保存
         dummy_pairs.append((pcd_intensity, pcd_intensity_negative, 0))
+
 
 
 
@@ -211,7 +221,7 @@ intensity2_list = np.array([pair[1] for pair in dummy_pairs])
 labels_list = np.array([pair[2] for pair in dummy_pairs])
 
 # .npz 形式で圧縮して保存
-save_file = 'vector_dataset_'  + str(k) + 'points_' +'noise005_'+ str(intensity1_list.shape[0]) + '_fps' + '.npz'
+save_file = 'vector_dataset_'  + str(k) + 'points_' +'noise005_'+ str(intensity1_list.shape[0])  + '.npz'
 save_path = os.path.join('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset', save_file)
 np.savez_compressed(
     save_path, 
