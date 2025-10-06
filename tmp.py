@@ -4,21 +4,27 @@ import torch
 import fpsample
 from utils.data_utils import load_ply , knn
 
-data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
-file_names = os.listdir(data_path)
-print(len(file_names))
+values = np.random.uniform(0, 20, 100)
+print(values)
 
-for i,file_name in enumerate(file_names):
-    print(i, file_name)
-    file_path = os.path.join(data_path, file_name)
-    pcd = load_ply(file_path)
-    indices = knn(pcd, k=32)
+step_values = np.round(values/0.5)
+print(step_values)
 
-    rng = np.random.default_rng()
-    sample_point = rng.integers(pcd.shape[0])
-    neighbor_indice = indices[sample_point]
-    pcd_intensity = pcd[sample_point, -1]
-    pcd_intensity_noise = pcd_intensity +  np.random.normal(0, 0.1, 32)
-    print(pcd_intensity_noise)
-    pcd_intensity_noise = np.maximum(0, pcd_intensity_noise)
-    print(pcd_intensity_noise)
+min_val = -0.1
+max_val = 0.1
+step = 0.01
+
+num_steps = int((max_val - min_val) / step) + 1
+random_integer = np.random.randint(0, num_steps, 10)
+result = min_val + random_integer*step
+print(result)
+
+def generate_noise(min, max, step, num):
+    num_steps = int((max - min) / step) + 1
+    random_integer = np.random.randint(0, num_steps, num)
+    result = min + random_integer*step
+    return result
+
+print(generate_noise(-0.1, 0.1, 0.01, 32))
+
+print((np.random.normal(0, 0.05, 32)))
