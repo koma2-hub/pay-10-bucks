@@ -64,8 +64,14 @@ class VectorkICNDataset(Dataset):
 epochs = 40
 lr = 0.0005
 batch_size = 32
+<<<<<<< HEAD
 input_dim = 32      # ★実際のデータに合わせてください
 embedding_dim = 32  # ★調整可能なハイパーパラメータ
+=======
+input_dim = 64      # ★実際のデータに合わせてください
+embedding_dim = 16
+  # ★調整可能なハイパーパラメータ
+>>>>>>> e423499 (modify noise)
 
 # 1. データセット全体をロード
 full_dataset = VectorkICNDataset('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset/vector_dataset_32points_noise005_2064.npz')
