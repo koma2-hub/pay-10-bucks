@@ -99,8 +99,6 @@ for i, file in enumerate(file_names1):
         sample_point = rng.integers(pcd.shape[0])
         #近傍点の取得
         neighbor_indices = indices[sample_point]
-        print(sample_point)
-        print(neighbor_indices)
         #近傍点の輝度値の取得。ユークリッド距離をもとにソートされているはず
         pcd_intensity = pcd[neighbor_indices, -1]
         #正例のペアとしてノイズを加えた輝度値を取得

@@ -183,7 +183,7 @@ def compute_correlations(src_hist, tgt_hist, model, grid_size, border, device, s
                 hist_2_points = tgt_window_points[idy]
 
                 # 窓のポイント数の差を考慮して重みをかける
-                diff_points = min(hist_1_points, hist_2_points) / np.abs(hist_1_points - hist_2_points) + 1e-6
+                diff_points = min(hist_1_points, hist_2_points) / (np.abs(hist_1_points - hist_2_points) + 1e-6)
                 if diff_points >= 1:
                     diff_points = 1
 
@@ -423,11 +423,11 @@ border = 0.6
 model_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/variation5/grid7_bin64/model/correlation_model.pth"
 
 #ダウンサンプリングするデータセットのパスを取得
-data_path = "/mnt/d/LaTeX/Seminar/1006/ply/"
+data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs/raw/additional"
 file_names = os.listdir(data_path)
-save_dir = "/mnt/d/LaTeX/Seminar/1006/ply/"
+save_dir = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs_icn/raw"
 
-
+print(file_names)
 for file in file_names:
     file_path = os.path.join(data_path, file)
     src_pcd = load_ply(file_path)
@@ -442,11 +442,12 @@ for file in file_names:
     window_coords1, window_coords2) = process_point_clouds(
     src_pcd, tgt_dummy, model_path, grid_size, threshold, bin_num, overlap, border
     )
-    src_icn_fps = downsample_pcd(src_icn, 4096)
+    src_icn_fps = downsample_pcd(src_icn, 1024)
     new_file = "icn1024_" + file
     save_path = os.path.join(save_dir, new_file)
     save_pcd(save_path, src_icn_fps)
     print("file saved:", save_path)
+    print("point cloud num ", src_icn_fps.shape[0])
 
     
 
