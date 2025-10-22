@@ -107,8 +107,8 @@ def generate_noise(min, max, step, num):
     return result
    
 """ここで点群データを読み込み、近傍点探索を行う。"""
-data_path1 = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
-data_path2 = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs_icn/raw"
+data_path1 = "/mnt/c/Users/komatsu/SICK/pay-10-bucks/data/robot_record_icn/raw"
+data_path2 = "/mnt/c/Users/komatsu/SICK/pay-10-bucks/data/mylabs_icn/raw"
 file_names1 = os.listdir(data_path1)
 file_names2 = os.listdir(data_path2)
 
@@ -253,7 +253,7 @@ labels_list = np.array([pair[2] for pair in dummy_pairs])
 
 # .npz 形式で圧縮して保存
 save_file = 'pcd_'  + str(k) + 'points_' +'noise005_transformed_'+ str(pcd1_list.shape[0])  + '.npz'
-save_path = os.path.join('/mnt/c/Users/matsu/SICK/pay-10-bucks/ISN/dataset', save_file)
+save_path = os.path.join('/mnt/c/Users/komatsu/SICK/pay-10-bucks/ISN/dataset', save_file)
 np.savez_compressed(
     save_path, 
     pcd1=pcd1_list,
