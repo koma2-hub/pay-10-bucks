@@ -125,7 +125,7 @@ for i, file in enumerate(file_names1):
     """
     正例のペアの作成
     """
-    for j in range(16):
+    for j in range(8):
         sample_point = rng.integers(pcd.shape[0])
         #近傍点の取得
         neighbor_indices = indices[sample_point]
@@ -146,7 +146,7 @@ for i, file in enumerate(file_names1):
     負例のペアの作成
     """
     
-    for j in range(16):
+    for j in range(8):
         #負のペア用に異なるデータからファイルをロード
         negative_file_index = rng.integers(len(file_names2))
         negative_file_path = os.path.join(data_path2, file_names2[negative_file_index])
@@ -186,7 +186,7 @@ for i, file in enumerate(file_names2):
     """
     正例のペアの作成
     """
-    for j in range(16):
+    for j in range(8):
         sample_point = rng.integers(pcd.shape[0])
         #近傍点の取得
         neighbor_indices = indices[sample_point]
@@ -205,7 +205,7 @@ for i, file in enumerate(file_names2):
     負例のペアの作成
     """
     
-    for j in range(16):
+    for j in range(8):
         #負のペア用に異なるデータからファイルをロード
         negative_file_index = rng.integers(len(file_names1))
         negative_file_path = os.path.join(data_path1, file_names1[negative_file_index])

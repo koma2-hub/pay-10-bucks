@@ -1,6 +1,6 @@
 import os,sys
 sys.path.append(os.pardir)
-from utils.data_utils import random_transform
+from utils.data_utils import random_transform, downsample_pcd
 import open3d as o3d
 import numpy as np
 import torch
@@ -53,7 +53,8 @@ def knn(x: np.ndarray, k: int):
     # ... (あなたのコード)
     num_points = x.shape[0]
     k = min(k, num_points)
-    if k <= 1: k = 1
+    if k <= 1:
+        k = 1
     x_coords = x[:, :3]
     x_norm_sq = np.sum(x_coords**2, axis=1, keepdims=True)
     dot_product = np.matmul(x_coords, x_coords.T)
@@ -63,17 +64,20 @@ def knn(x: np.ndarray, k: int):
 
 class SubNetwork(nn.Module):
     # ... (あなたのモデル定義)
-    def __init__(self, input_dim=16, embedding_dim=32):
+    def __init__(self, input_dim=32, embedding_dim=64):
         super(SubNetwork, self).__init__()
         self.fc = nn.Sequential(
-            nn.Linear(input_dim, 128), nn.ReLU(inplace=True),
-            nn.Linear(128, 128), nn.ReLU(inplace=True),
+            nn.Linear(input_dim, 128), 
+            nn.ReLU(inplace=True),
+
+            nn.Linear(128, 128), 
+            nn.ReLU(inplace=True),
             nn.Linear(128, embedding_dim)
         )
-    def forward(self, x): return self.fc(x)
+    def forward(self, x):
+        return self.fc(x)
 
 class SiameseNetwork(nn.Module):
-    # ... (あなたのモデル定義)
     def __init__(self, sub_network):
         super(SiameseNetwork, self).__init__()
         self.sub_network = sub_network
@@ -95,16 +99,16 @@ K_NEIGHBORS = 32
 #近傍点の個数と一致
 INPUT_DIM = 32
 EMBEDDING_DIM = 32
-DISTANCE_THRESHOLD = 0.20
+DISTANCE_THRESHOLD = 0.1
 
 # --- データ読み込みと記述子計算 ---
 print("Loading point clouds and computing descriptors...")
-src_icn_fps = load_ply(SRC_PATH)
-#tgt_icn_fps = random_transform(src_icn_fps)
-tgt_icn_fps = load_ply(TGT_PATH)
+src = load_ply(SRC_PATH)
+#tgt, transformation = random_transform(src)
+tgt = load_ply(TGT_PATH)
 
-src_knn = knn(src_icn_fps, k=K_NEIGHBORS)
-tgt_knn = knn(tgt_icn_fps, k=K_NEIGHBORS)
+src_knn = knn(src, k=K_NEIGHBORS)
+tgt_knn = knn(tgt, k=K_NEIGHBORS)
 
 """
 ソース点群における各近傍点の輝度値を取得する。
@@ -115,7 +119,7 @@ for i in range(src_knn.shape[0]):
     #各点の近傍点を取得
     neighbor_indices = src_knn[i]
     #近傍点の輝度値を取得
-    src_intensity = src_icn_fps[neighbor_indices, -1]
+    src_intensity = src[neighbor_indices, -1]
     #輝度値を保存
     src_vector.append(src_intensity)
 
@@ -126,15 +130,12 @@ for i in range(src_knn.shape[0]):
 tgt_vector = []
 for i in range(tgt_knn.shape[0]):
     neighbor_indices = tgt_knn[i]
-    tgt_intensity = tgt_icn_fps[neighbor_indices, -1]
+    tgt_intensity = tgt[neighbor_indices, -1]
     tgt_vector.append(tgt_intensity)
 
 #取得した輝度値はnumpy配列に変換する
 src_vector = np.array(src_vector, dtype=np.float32)
 tgt_vector = np.array(tgt_vector, dtype=np.float32)
-
-print(src_vector)
-print(tgt_vector)
 
 # --- モデルのロードと設定 ---
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -149,8 +150,6 @@ model.eval()
 
 src_vector_tensor = torch.from_numpy(src_vector).to(device)
 tgt_vector_tensor = torch.from_numpy(tgt_vector).to(device)
-print(src_vector_tensor)
-print(tgt_vector_tensor)
 
 # --- ★★★【修正箇所】相互最近傍チェックを導入したマッチング処理 ★★★ ---
 print("Matching descriptors using the trained model with Mutual Nearest Neighbor Check...")
@@ -189,6 +188,15 @@ with torch.no_grad():
 print(f"マッチング完了。 {len(correspondences)} 個の信頼性の高い1対1対応点が見つかりました。")
 # (この後の可視化コードは変更ありません)
 
+# 元の点群（色付き）で可視化
+src_pcd = o3d.geometry.PointCloud()
+src_pcd.points = o3d.utility.Vector3dVector(src[:, :3])
+src_pcd.paint_uniform_color([0, 0.651, 0.929]) # ソース(青)
+tgt_pcd = o3d.geometry.PointCloud()
+tgt_pcd.points = o3d.utility.Vector3dVector(tgt[:, :3])
+tgt_pcd.paint_uniform_color([1, 0.706, 0])   # ターゲット(黄)
+o3d.visualization.draw_geometries([src_pcd, tgt_pcd,],
+                                    window_name="Point Cloud Before Transformed")
 
 # ==============================================================================
 # 3. 結果の可視化 (open3dを使用)
@@ -196,11 +204,11 @@ print(f"マッチング完了。 {len(correspondences)} 個の信頼性の高い
 if correspondences:
     # (可視化部分は前回の回答と同じ)
     o3d_pcd_a = o3d.geometry.PointCloud()
-    o3d_pcd_a.points = o3d.utility.Vector3dVector(src_icn_fps[:, :3])
+    o3d_pcd_a.points = o3d.utility.Vector3dVector(src[:, :3])
     o3d_pcd_a.paint_uniform_color([0, 0.651, 0.929])
 
     o3d_pcd_b = o3d.geometry.PointCloud()
-    o3d_pcd_b.points = o3d.utility.Vector3dVector(tgt_icn_fps[:, :3])
+    o3d_pcd_b.points = o3d.utility.Vector3dVector(tgt[:, :3])
     o3d_pcd_b.paint_uniform_color([1, 0.706, 0])
 
     corr_set = o3d.utility.Vector2iVector(correspondences)
@@ -251,11 +259,6 @@ if len(correspondences) > 3: # RANSACは最低3つの対応点を必要としま
     pcd_a_transformed = o3d.geometry.PointCloud(pcd_a_xyz)
     pcd_a_transformed.transform(transformation_matrix)
 
-    # 元の点群（色付き）で可視化
-    o3d_pcd_a.paint_uniform_color([0, 0.651, 0.929]) # ソース(青)
-    o3d_pcd_b.paint_uniform_color([1, 0.706, 0])   # ターゲット(黄)
-    o3d.visualization.draw_geometries([o3d_pcd_a, o3d_pcd_b,],
-                                      window_name="Point Cloud Before Transformed")
     
     # 変換後のソース点群を緑色で表示
     pcd_a_transformed_color = o3d.geometry.PointCloud(pcd_a_transformed)
