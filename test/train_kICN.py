@@ -14,7 +14,7 @@ class SubNetwork(nn.Module):
     def __init__(self, input_dim=32, embedding_dim=64):
         super(SubNetwork, self).__init__()
         self.fc = nn.Sequential(
-            nn.Linear(input_dim, 128),
+            nn.Linear(input_dim, 64),
             nn.ReLU(inplace=True),
             nn.Linear(128, 128),
             nn.ReLU(inplace=True),
@@ -33,7 +33,7 @@ class SiameseNetwork(nn.Module):
         return output1, output2
 
 class ContrastiveLoss(nn.Module):
-    def __init__(self, margin=2.0):
+    def __init__(self, margin=4.0):
         super(ContrastiveLoss, self).__init__()
         self.margin = margin
     def forward(self, output1, output2, label):

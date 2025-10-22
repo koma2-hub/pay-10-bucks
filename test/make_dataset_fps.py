@@ -3,7 +3,7 @@ sys.path.append(os.pardir)
 import fpsample
 from utils.data_utils import load_ply, save_ply, downsample_pcd
 #ダウンサンプリングするデータセットのパスを取得
-data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs/raw"
+data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs/raw/additional"
 file_names = os.listdir(data_path)
 save_dir = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs_fps/raw"
 

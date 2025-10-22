@@ -1,5 +1,8 @@
-import numpy as np
+#utils.py
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
 import fpsample
 
 def load_ply(filename):
@@ -201,9 +204,68 @@ def save_ply(filename, pcd):
             f.write(f"{row[0]:.4f} {row[1]:.4f} {row[2]:.4f} {int(row[3])} {int(row[4])} {int(row[5])} {row[6]:.2f}\n")
 
 
-def downsample_pcd(pointcloud, downsample_point, intensity=False) -> np.ndarray:
+def downsample_pcd(pointcloud, downsample_point) -> np.ndarray:
     if pointcloud.shape[0] < downsample_point:
         downsample_point = pointcloud.shape[0]
     fps_indices = fpsample.fps_sampling(pointcloud, downsample_point)
     downsampled_pc = pointcloud[fps_indices][:, :4]
     return downsampled_pc
+
+
+# --- 補助関数 ---
+def knn(x: np.ndarray, k: int):
+    """
+    一つの点群データ `x` の各点について、k近傍点のインデックスをNumPyで計算する。
+
+    Args:
+        x: 点群データ。形状は (N, C)。
+           N: 点の数
+           C: 特徴量次元
+        k: 探す近傍点の数。
+
+    Returns:
+        np.ndarray: 各点のk近傍点のインデックス。形状は (N, k)。
+    """
+    num_points = x.shape[0]
+
+    # kが点群の総点数を超えないように調整
+    k = min(k, num_points)
+    if k <= 1:
+        k = 1
+    x_norm_sq = np.sum(x**2, axis=1, keepdims=True)  # 形状: (N, 1)
+    dot_product = np.matmul(x, x.T)  # 形状: (N, N)
+    dist_matrix = x_norm_sq - 2 * dot_product + x_norm_sq.T  # 形状: (N, N)
+    indices = np.argpartition(dist_matrix, k, axis=1)[:, :k]
+
+    return indices
+
+def edge_feature(x, k=32, idx=None):
+    """
+    Input:
+        x: (B, C, N)  # B:バッチサイズ, C:特徴量次元, N:点数
+        k: int
+        idx: (B, N, k)  # Precomputed k-NN indices (optional)
+    Return:
+        feature: (B, 2*C, N, k) # Cは入力xの次元
+    """
+    batch_size = x.size(0)
+    num_points = x.size(2)
+    num_dims = x.size(1) # C
+    
+    if idx is None:
+        idx = knn(x, k=k)
+    device = x.device
+    idx = idx.to(device)
+    idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1)*num_points
+    idx = idx + idx_base
+    idx = idx.view(-1)
+
+    x_flat = x.transpose(2, 1).contiguous().view(-1, num_dims) 
+    neighbor = x_flat[idx, :] 
+    neighbor = neighbor.view(batch_size, num_points, k, num_dims) 
+    x = x.transpose(2, 1).contiguous().view(batch_size, num_points, 1, num_dims)
+
+    feature = torch.cat([x.expand_as(neighbor), neighbor - x], dim=3)
+    feature = feature.permute(0, 3, 1, 2).contiguous() 
+
+    return feature

@@ -219,7 +219,7 @@ intensity2_list = np.array([pair[1] for pair in dummy_pairs])
 labels_list = np.array([pair[2] for pair in dummy_pairs])
 
 # .npz 形式で圧縮して保存
-save_file = 'vector_dataset_'  + str(k) + 'points_' +'noise005_'+ str(intensity1_list.shape[0])  + '.npz'
+save_file = 'vector_dataset_'  + str(k) + 'points_' +'noise005_'+ str(intensity1_list.shape[0]) + '_icn' + '.npz'
 save_path = os.path.join('/mnt/c/Users/matsu/SICK/pay-10-bucks/kICN_Dataset', save_file)
 np.savez_compressed(
     save_path, 

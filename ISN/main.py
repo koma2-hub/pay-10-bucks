@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import Dataset, DataLoader, random_split
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,7 +24,7 @@ class SiameseNetwork(nn.Module):
         return output1, output2
 
 class ContrastiveLoss(nn.Module):
-    def __init__(self, margin=2.0):
+    def __init__(self, margin=4.0):
         super(ContrastiveLoss, self).__init__()
         self.margin = margin
     def forward(self, output1, output2, label):
@@ -51,14 +52,14 @@ class ISNDataset(Dataset):
 
 # ハイパーパラメータ
 epochs = 30
-lr = 0.0005
+lr = 0.001
 batch_size = 32
 input_dim = 32      # ★実際のデータに合わせてください
-embedding_dims = 256  # ★調整可能なハイパーパラメータ
-output_channels = 40
+embedding_dims = 128  # ★調整可能なハイパーパラメータ
+output_channels = 32
 
 # 1. データセット全体をロード
-full_dataset = ISNDataset('/mnt/c/Users/matsu/SICK/pay-10-bucks/ISN/dataset/pcd_32points_noise005_transformed_2064.npz')
+full_dataset = ISNDataset('/mnt/c/Users/matsu/SICK/pay-10-bucks/ISN/dataset/pcd_32points_noise005_transformed_2256.npz')
 
 # 2. データセットを訓練用とテスト用に分割 (例: 80% 訓練, 20% テスト)
 train_size = int(0.8 * len(full_dataset))
@@ -85,7 +86,7 @@ model = SiameseNetwork(sub_network=sub_net).to(device)
 criterion = ContrastiveLoss()
 
 optimizer = optim.Adam(model.parameters(), lr=lr)
-
+scheduler = CosineAnnealingLR(optimizer=optimizer, T_max=epochs, eta_min=0.0005)
 # 損失を保存するためのリスト
 train_losses = []
 
@@ -112,17 +113,17 @@ print("--- 訓練完了 ---")
 plt.figure(figsize=(10, 5))
 epoch_range = range(1, epochs + 1)
 plt.plot(epoch_range, train_losses, marker='o', linestyle='-', label='Training Loss')
-plt.title('ISN_32points_noise005_transformed_2064')
+plt.title('ISN_32points_noise005_transformed__2256')
 plt.xlabel('Epochs')
 plt.ylabel('Loss')
 plt.xticks(epoch_range)
 plt.grid(True)
 plt.legend()
-plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/ISN/logs/ISN_32points_noise005_2064_epoch30_loss.png')
+plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/ISN/logs/ISN_32points_noise005_transformed__2256_epoch30_loss.png')
 plt.show()
 
-torch.save(model.state_dict(), '/mnt/c/Users/matsu/SICK/pay-10-bucks/ISN/models/ISN_siamese_model_32points_noise005_2064_epoch30.pth')
-print("モデルを '/mnt/c/Users/matsu/SICK/pay-10-bucks/ISN/models/ISN_siamese_model_32points_noise005_2064_epoch30.pth' として保存しました。")
+torch.save(model.state_dict(), '/mnt/c/Users/matsu/SICK/pay-10-bucks/ISN/models/ISN_siamese_model_32points_noise005_transformed__2256_epoch30.pth')
+print("モデルを '/mnt/c/Users/matsu/SICK/pay-10-bucks/ISN/models/ISN_siamese_model_32points_noise005_transformed__2256_epoch30.pth' として保存しました。")
 # ==============================================================================
 # D. 評価フェーズ
 # ==============================================================================
@@ -204,10 +205,10 @@ plt.hist(distances[labels == 0], bins=50, alpha=0.7, label='Negative Pairs (Diff
 # 最適な閾値を線で表示
 plt.axvline(best_threshold, color='red', linestyle='--', label=f'Best Threshold = {best_threshold:.2f}')
 plt.axvline(best_accuracy, label=f'Best Accuracy = {best_accuracy:.2f}')
-plt.title('ISN_32points_noise005_2064')
+plt.title('ISN_32points_noise005_transformed__2256')
 plt.xlabel('Euclidean Distance')
 plt.ylabel('Frequency')
 plt.legend()
 plt.grid(True)
-plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/ISN/logs/ISN_32points_noise005_transformed_2064_epoch30_distribution.png')
+plt.savefig('/mnt/c/Users/matsu/SICK/pay-10-bucks/ISN/logs/ISN_32points_noise005_transformed__2256_epoch30_distribution.png')
 plt.show()
