@@ -12,31 +12,31 @@ class DGCNNwithIntensity(nn.Module):
         self.embedding_dims=embedding_dims
         self.output_channel = output_channels
 
-        self.bn1 = nn.BatchNorm2d(16)
-        self.bn2 = nn.BatchNorm2d(64)
-        self.bn3 = nn.BatchNorm2d(256)
+        self.bn1 = nn.BatchNorm2d(8)
+        self.bn2 = nn.BatchNorm2d(16)
+        self.bn3 = nn.BatchNorm2d(32)
         self.bn4 = nn.BatchNorm1d(embedding_dims)
 
-        self.conv1 = nn.Sequential(nn.Conv2d(8, 16, kernel_size=1, bias=False),
+        self.conv1 = nn.Sequential(nn.Conv2d(8, 8, kernel_size=1, bias=False),
                                    self.bn1,
                                    nn.LeakyReLU(negative_slope=0.2))
-        self.conv2 = nn.Sequential(nn.Conv2d(16*2, 64, kernel_size=1, bias=False),
+        self.conv2 = nn.Sequential(nn.Conv2d(8*2, 16, kernel_size=1, bias=False),
                                    self.bn2,
                                    nn.LeakyReLU(negative_slope=0.2))
-        self.conv3 = nn.Sequential(nn.Conv2d(64*2, 256, kernel_size=1, bias=False),
+        self.conv3 = nn.Sequential(nn.Conv2d(16*2, 32, kernel_size=1, bias=False),
                                    self.bn3,
                                    nn.LeakyReLU(negative_slope=0.2))
-        self.conv4 = nn.Sequential(nn.Conv1d(336, self.embedding_dims, kernel_size=1, bias=False),
+        self.conv4 = nn.Sequential(nn.Conv1d(56, self.embedding_dims, kernel_size=1, bias=False),
                                    self.bn4,
                                    nn.LeakyReLU(negative_slope=0.2))
         
-        self.linear1 = nn.Linear(self.embedding_dims*2, 256, bias=False)
-        self.bn5 = nn.BatchNorm1d(256)
+        self.linear1 = nn.Linear(self.embedding_dims*2, 128, bias=False)
+        self.bn5 = nn.BatchNorm1d(128)
         self.dp1 = nn.Dropout(0.5)
-        self.linear2 = nn.Linear(256, 128)
-        self.bn6 = nn.BatchNorm1d(128)
+        self.linear2 = nn.Linear(128, 64)
+        self.bn6 = nn.BatchNorm1d(64)
         self.dp2 = nn.Dropout(0.5)
-        self.linear3 = nn.Linear(128, output_channels)
+        self.linear3 = nn.Linear(64, output_channels)
     
     def forward(self, x):
         batch_size = x.size(0)
