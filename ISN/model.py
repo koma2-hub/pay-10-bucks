@@ -12,21 +12,21 @@ class DGCNNwithIntensity(nn.Module):
         self.embedding_dims=embedding_dims
         self.output_channel = output_channels
 
-        self.bn1 = nn.BatchNorm2d(8)
-        self.bn2 = nn.BatchNorm2d(16)
-        self.bn3 = nn.BatchNorm2d(32)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.bn3 = nn.BatchNorm2d(128)
         self.bn4 = nn.BatchNorm1d(embedding_dims)
 
-        self.conv1 = nn.Sequential(nn.Conv2d(8, 8, kernel_size=1, bias=False),
+        self.conv1 = nn.Sequential(nn.Conv2d(8, 64, kernel_size=1, bias=False),
                                    self.bn1,
                                    nn.LeakyReLU(negative_slope=0.2))
-        self.conv2 = nn.Sequential(nn.Conv2d(8*2, 16, kernel_size=1, bias=False),
+        self.conv2 = nn.Sequential(nn.Conv2d(64*2, 64, kernel_size=1, bias=False),
                                    self.bn2,
                                    nn.LeakyReLU(negative_slope=0.2))
-        self.conv3 = nn.Sequential(nn.Conv2d(16*2, 32, kernel_size=1, bias=False),
+        self.conv3 = nn.Sequential(nn.Conv2d(64*2, 128, kernel_size=1, bias=False),
                                    self.bn3,
                                    nn.LeakyReLU(negative_slope=0.2))
-        self.conv4 = nn.Sequential(nn.Conv1d(56, self.embedding_dims, kernel_size=1, bias=False),
+        self.conv4 = nn.Sequential(nn.Conv1d(256, self.embedding_dims, kernel_size=1, bias=False),
                                    self.bn4,
                                    nn.LeakyReLU(negative_slope=0.2))
         
