@@ -1,4 +1,7 @@
-#model.py
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
 import os
 import sys
 import glob
@@ -10,45 +13,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from util import quat2mat
 
+
+# Part of the code is referred from: http://nlp.seas.harvard.edu/2018/04/03/attention.html#positional-encoding
 
 def clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
-
-
-#輝度値も含めたk-近傍法
-def knn(x, k):
-    inner = -2*torch.matmul(x.transpose(2, 1), x)
-    xx = torch.sum(x**2, dim=1, keepdim=True)
-    pairwise_distance = -xx - inner - xx.transpose(2, 1)
- 
-    idx = pairwise_distance.topk(k=k, dim=-1)[1]   # (batch_size, num_points, k)
-    return idx
-
-def get_graph_feature(x, k=20, idx=None):
-    batch_size = x.size(0)
-    num_points = x.size(2)
-    x = x.view(batch_size, -1, num_points)
-    if idx is None:
-        idx = knn(x, k=k)   # (batch_size, num_points, k)
-    device = torch.device('cuda')
-
-    idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1)*num_points
-
-    idx = idx + idx_base
-
-    idx = idx.view(-1)
- 
-    _, num_dims, _ = x.size()
-
-    x = x.transpose(2, 1).contiguous()   # (batch_size, num_points, num_dims)  -> (batch_size*num_points, num_dims) #   batch_size * num_points * k + range(0, batch_size*num_points)
-    feature = x.view(batch_size*num_points, -1)[idx, :]
-    feature = feature.view(batch_size, num_points, k, num_dims) 
-    x = x.view(batch_size, num_points, 1, num_dims).repeat(1, 1, k, 1)
-    
-    feature = torch.cat((feature-x, x), dim=3).permute(0, 3, 1, 2).contiguous()
-  
-    return feature
 
 
 def attention(query, key, value, mask=None, dropout=None):
@@ -58,6 +29,49 @@ def attention(query, key, value, mask=None, dropout=None):
         scores = scores.masked_fill(mask == 0, -1e9)
     p_attn = F.softmax(scores, dim=-1)
     return torch.matmul(p_attn, value), p_attn
+
+
+def nearest_neighbor(src, dst):
+    inner = -2 * torch.matmul(src.transpose(1, 0).contiguous(), dst)  # src, dst (num_dims, num_points)
+    distances = -torch.sum(src ** 2, dim=0, keepdim=True).transpose(1, 0).contiguous() - inner - torch.sum(dst ** 2,
+                                                                                                           dim=0,
+                                                                                                           keepdim=True)
+    distances, indices = distances.topk(k=1, dim=-1)
+    return distances, indices
+
+
+def knn(x, k):
+    inner = -2 * torch.matmul(x.transpose(2, 1).contiguous(), x)
+    xx = torch.sum(x ** 2, dim=1, keepdim=True)
+    pairwise_distance = -xx - inner - xx.transpose(2, 1).contiguous()
+
+    idx = pairwise_distance.topk(k=k, dim=-1)[1]  # (batch_size, num_points, k)
+    return idx
+
+
+def get_graph_feature(x, k=20):
+    # x = x.squeeze()
+    idx = knn(x, k=k)  # (batch_size, num_points, k)
+    batch_size, num_points, _ = idx.size()
+    device = torch.device('cuda')
+
+    idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
+
+    idx = idx + idx_base
+
+    idx = idx.view(-1)
+
+    _, num_dims, _ = x.size()
+
+    x = x.transpose(2,
+                    1).contiguous()  # (batch_size, num_points, num_dims)  -> (batch_size*num_points, num_dims) #   batch_size * num_points * k + range(0, batch_size*num_points)
+    feature = x.view(batch_size * num_points, -1)[idx, :]
+    feature = feature.view(batch_size, num_points, k, num_dims)
+    x = x.view(batch_size, num_points, 1, num_dims).repeat(1, 1, k, 1)
+
+    feature = torch.cat((feature, x), dim=3).permute(0, 3, 1, 2)
+
+    return feature
 
 
 class EncoderDecoder(nn.Module):
@@ -84,7 +98,7 @@ class EncoderDecoder(nn.Module):
 
     def decode(self, memory, src_mask, tgt, tgt_mask):
         return self.generator(self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask))
-    
+
 
 class Generator(nn.Module):
     def __init__(self, emb_dims):
@@ -107,7 +121,7 @@ class Generator(nn.Module):
         translation = self.proj_trans(x)
         rotation = rotation / torch.norm(rotation, p=2, dim=1, keepdim=True)
         return rotation, translation
-    
+
 
 class Encoder(nn.Module):
     def __init__(self, layer, N):
@@ -146,7 +160,7 @@ class LayerNorm(nn.Module):
         mean = x.mean(-1, keepdim=True)
         std = x.std(-1, keepdim=True)
         return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
-    
+
 
 class SublayerConnection(nn.Module):
     def __init__(self, size, dropout=None):
@@ -237,65 +251,63 @@ class PositionwiseFeedForward(nn.Module):
         return self.w_2(self.norm(F.relu(self.w_1(x)).transpose(2, 1).contiguous()).transpose(2, 1).contiguous())
 
 
-class DGCNNwithIntensity(nn.Module):
-    def __init__(self, k=32, embedding_dims=512):
-        super(DGCNNwithIntensity, self).__init__()
-        self.k = k
-        self.embedding_dims=embedding_dims
+class PointNet(nn.Module):
+    def __init__(self, emb_dims=512):
+        super(PointNet, self).__init__()
+        self.conv1 = nn.Conv1d(3, 64, kernel_size=1, bias=False)
+        self.conv2 = nn.Conv1d(64, 64, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv1d(64, 64, kernel_size=1, bias=False)
+        self.conv4 = nn.Conv1d(64, 128, kernel_size=1, bias=False)
+        self.conv5 = nn.Conv1d(128, emb_dims, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm1d(64)
+        self.bn2 = nn.BatchNorm1d(64)
+        self.bn3 = nn.BatchNorm1d(64)
+        self.bn4 = nn.BatchNorm1d(128)
+        self.bn5 = nn.BatchNorm1d(emb_dims)
+
+    def forward(self, x):
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = F.relu(self.bn4(self.conv4(x)))
+        x = F.relu(self.bn5(self.conv5(x)))
+        return x
 
 
+class DGCNN(nn.Module):
+    def __init__(self, emb_dims=512):
+        super(DGCNN, self).__init__()
+        self.conv1 = nn.Conv2d(6, 64, kernel_size=1, bias=False)
+        self.conv2 = nn.Conv2d(64, 64, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=1, bias=False)
+        self.conv4 = nn.Conv2d(128, 256, kernel_size=1, bias=False)
+        self.conv5 = nn.Conv2d(512, emb_dims, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.bn2 = nn.BatchNorm2d(64)
         self.bn3 = nn.BatchNorm2d(128)
-        self.bn4 = nn.BatchNorm1d(embedding_dims)
+        self.bn4 = nn.BatchNorm2d(256)
+        self.bn5 = nn.BatchNorm2d(emb_dims)
 
-        self.conv1 = nn.Sequential(nn.Conv2d(8, 64, kernel_size=1, bias=False),
-                                   self.bn1,
-                                   nn.LeakyReLU(negative_slope=0.2))
-        self.conv2 = nn.Sequential(nn.Conv2d(64*2, 64, kernel_size=1, bias=False),
-                                   self.bn2,
-                                   nn.LeakyReLU(negative_slope=0.2))
-        self.conv3 = nn.Sequential(nn.Conv2d(64*2, 128, kernel_size=1, bias=False),
-                                   self.bn3,
-                                   nn.LeakyReLU(negative_slope=0.2))
-        self.conv4 = nn.Sequential(nn.Conv1d(256, self.embedding_dims, kernel_size=1, bias=False),
-                                   self.bn4,
-                                   nn.LeakyReLU(negative_slope=0.2))
-        
-        self.linear1 = nn.Linear(self.embedding_dims*2, 128, bias=False)
-        self.bn5 = nn.BatchNorm1d(128)
-        self.dp1 = nn.Dropout(0.5)
-        self.linear2 = nn.Linear(128, 64)
-        self.bn6 = nn.BatchNorm1d(64)
-        self.dp2 = nn.Dropout(0.5)
-    
     def forward(self, x):
-        batch_size = x.size(0)
-        x = x.permute(0, 2, 1)
-        x = get_graph_feature(x, k=self.k)
-        x = self.conv1(x)
-        x1 = x.max(dim=-1, keepdim=False)[0]
+        batch_size, num_dims, num_points = x.size()
+        x = get_graph_feature(x)
+        x = F.relu(self.bn1(self.conv1(x)))
+        x1 = x.max(dim=-1, keepdim=True)[0]
 
-        x = get_graph_feature(x1, k=self.k)
-        x = self.conv2(x)
-        x2 = x.max(dim=-1, keepdim=False)[0]
+        x = F.relu(self.bn2(self.conv2(x)))
+        x2 = x.max(dim=-1, keepdim=True)[0]
 
-        x = get_graph_feature(x2, k=self.k)
-        x = self.conv3(x)
-        x3 = x.max(dim=-1, keepdim=False)[0]
+        x = F.relu(self.bn3(self.conv3(x)))
+        x3 = x.max(dim=-1, keepdim=True)[0]
 
-        x = torch.cat((x1, x2, x3), dim=1)
+        x = F.relu(self.bn4(self.conv4(x)))
+        x4 = x.max(dim=-1, keepdim=True)[0]
 
-        x = self.conv4(x)
-        x1 = F.adaptive_max_pool1d(x, 1).view(batch_size, -1)
-        x2 = F.adaptive_avg_pool1d(x, 1).view(batch_size, -1)
-        x = torch.cat((x1, x2), 1)
+        x = torch.cat((x1, x2, x3, x4), dim=1)
 
-        x = F.leaky_relu(self.bn5(self.linear1(x)), negative_slope=0.2)
-        x = self.dp1(x)
-        x = F.leaky_relu(self.bn6(self.linear2(x)), negative_slope=0.2)
-
+        x = F.relu(self.bn5(self.conv5(x))).view(batch_size, -1, num_points)
         return x
+
 
 class MLPHead(nn.Module):
     def __init__(self, args):
@@ -413,9 +425,48 @@ class SVDHead(nn.Module):
         return R, t.view(batch_size, 3)
 
 
-
 class DCP(nn.Module):
-    def __init__(self):
+    def __init__(self, args):
         super(DCP, self).__init__()
-        self.emb_dims = 512
-        self.emb_nn = DGCNNwithIntensity()
+        self.emb_dims = args.emb_dims
+        self.cycle = args.cycle
+        if args.emb_nn == 'pointnet':
+            self.emb_nn = PointNet(emb_dims=self.emb_dims)
+        elif args.emb_nn == 'dgcnn':
+            self.emb_nn = DGCNN(emb_dims=self.emb_dims)
+        else:
+            raise Exception('Not implemented')
+
+        if args.pointer == 'identity':
+            self.pointer = Identity()
+        elif args.pointer == 'transformer':
+            self.pointer = Transformer(args=args)
+        else:
+            raise Exception("Not implemented")
+
+        if args.head == 'mlp':
+            self.head = MLPHead(args=args)
+        elif args.head == 'svd':
+            self.head = SVDHead(args=args)
+        else:
+            raise Exception('Not implemented')
+
+    def forward(self, *input):
+        src = input[0]
+        tgt = input[1]
+        src_embedding = self.emb_nn(src)
+        tgt_embedding = self.emb_nn(tgt)
+
+        src_embedding_p, tgt_embedding_p = self.pointer(src_embedding, tgt_embedding)
+
+        src_embedding = src_embedding + src_embedding_p
+        tgt_embedding = tgt_embedding + tgt_embedding_p
+
+        rotation_ab, translation_ab = self.head(src_embedding, tgt_embedding, src, tgt)
+        if self.cycle:
+            rotation_ba, translation_ba = self.head(tgt_embedding, src_embedding, tgt, src)
+
+        else:
+            rotation_ba = rotation_ab.transpose(2, 1).contiguous()
+            translation_ba = -torch.matmul(rotation_ba, translation_ab.unsqueeze(2)).squeeze(2)
+        return rotation_ab, translation_ab, rotation_ba, translation_ba
