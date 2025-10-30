@@ -37,6 +37,7 @@ k = 1024
 overlap_num = 512
 
 def DCPDataset(sample_point, k, overlap_num, data_path):
+    datasets = []
     file_names = os.listdir(data_path)
     for file in file_names:
         file_path = os.path.join(data_path, file)
