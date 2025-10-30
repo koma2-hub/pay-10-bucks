@@ -36,7 +36,15 @@ sample_point = 4096
 k = 1024
 overlap_num = 512
 
-pcd = load_ply("/mnt/c/Users/komatsu/SICK/pay-10-bucks/data/lab_room/lab_room001.ply")
+def DCPDataset(sample_point, k, overlap_num, data_path):
+    file_names = os.listdir(data_path)
+    for file in file_names:
+        file_path = os.path.join(data_path, file)
+        pcd = load_ply(file_path)
+        ds_pcd = downsample_pcd(pcd, sample_point)
+        indices = knn(ds_pcd, k)
+
+pcd = load_ply("/mnt/d/SICK/pay-10-bucks/data/mylabs/raw/mylab001.ply")
 ds_pcd = downsample_pcd(pcd, sample_point)
 knn_indices = knn(ds_pcd, k)
 visualize_pcd(pcd)
@@ -52,6 +60,7 @@ for i, indice in enumerate(knn_indices):
     if(unique_indice.shape[0] <= 1074):
         candidates.append(i)
 
+print(len(candidates))
 
 print(candidates[5])
 idx = candidates[5]
@@ -62,6 +71,6 @@ for idx in candidates:
     pcd_index = knn_indices[idx]
     pcd_index = pcd_index.astype(np.int64)
     pcd = ds_pcd[pcd_index]
-    visualize_pcd(pcd)
+    #visualize_pcd(pcd)
 
     
