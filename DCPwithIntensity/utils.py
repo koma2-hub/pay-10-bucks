@@ -53,7 +53,7 @@ def downsample_pcd(pointcloud, downsample_point, intensity=False) -> np.ndarray:
     downsampled_pc = pointcloud[fps_indices][:, :4]
     return downsampled_pc
 
-def load_ply(filename):
+def load_ply(filename, intensity=True):
     #.plyファイルを読み込み　点群(x, y, z, intensity)のnumpy配列を返す
     try:
         with open(filename, 'r') as f:
@@ -75,8 +75,10 @@ def load_ply(filename):
             # [x, y, z, intensity] の形に整形
             # intensity が最後の列にあると仮定 (points[:, -1])
             points = np.concatenate([points[:, :3], points[:, -1].reshape(-1, 1)], axis=1)
-            
-            return points
+            if(intensity):
+                return points
+            else:
+                return points[:, :3]
     except FileNotFoundError:
         print(f"ファイルが見つかりません: {filename}")
         # 必要に応じて sys.exit(1) などで終了するか、Noneを返す
