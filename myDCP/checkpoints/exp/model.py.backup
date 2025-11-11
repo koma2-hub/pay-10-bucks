@@ -357,19 +357,18 @@ class Transformer(nn.Module):
         attn = MultiHeadedAttention(self.n_heads, self.emb_dims)
         ff = PositionwiseFeedForward(self.emb_dims, self.ff_dims, self.dropout)
         self.model = EncoderDecoder(Encoder(EncoderLayer(self.emb_dims, c(attn), c(ff), self.dropout), self.N),
-                                  Decoder(DecoderLayer(self.emb_dims, c(attn), c(attn), c(ff), self.dropout), self.N),
-                                  
-                                  # ★ 修正点: (B, L, 512) を受け取るための Linear レイヤーを定義
-                                  nn.Sequential(nn.Linear(self.emb_dims, self.emb_dims), nn.LayerNorm(self.emb_dims)), # src_embed
-                                  nn.Sequential(nn.Linear(self.emb_dims, self.emb_dims), nn.LayerNorm(self.emb_dims)), # tgt_embed
-                                  
-                                  nn.Sequential())
+                                    Decoder(DecoderLayer(self.emb_dims, c(attn), c(attn), c(ff), self.dropout), self.N),
+                                    nn.Sequential(),
+                                    nn.Sequential(),
+                                    nn.Sequential())
 
     def forward(self, *input):
         src = input[0]
         tgt = input[1]
-        tgt_embedding = self.model(src, tgt, None, None)
-        src_embedding = self.model(tgt, src, None, None)
+        src = src.transpose(2, 1).contiguous()
+        tgt = tgt.transpose(2, 1).contiguous()
+        tgt_embedding = self.model(src, tgt, None, None).transpose(2, 1).contiguous()
+        src_embedding = self.model(tgt, src, None, None).transpose(2, 1).contiguous()
         return src_embedding, tgt_embedding
 
 
@@ -385,15 +384,13 @@ class SVDHead(nn.Module):
         tgt_embedding = input[1]
         src = input[2]
         tgt = input[3]
-
-        #輝度値をスライス
-        src = src[:, :3, :]
-        tgt = tgt[:, :3, :]
-        
         batch_size = src.size(0)
 
-        d_k = src_embedding.size(2)
-        scores = torch.matmul(src_embedding, tgt_embedding.transpose(2, 1).contiguous()) / math.sqrt(d_k)
+        src = src[:, :3, :]
+        tgt = tgt[:, :3, :]
+
+        d_k = src_embedding.size(1)
+        scores = torch.matmul(src_embedding.transpose(2, 1).contiguous(), tgt_embedding) / math.sqrt(d_k)
         scores = torch.softmax(scores, dim=2)
 
         src_corr = torch.matmul(tgt, scores.transpose(2, 1).contiguous())
@@ -462,10 +459,6 @@ class DCP(nn.Module):
         tgt = input[1]
         src_embedding = self.emb_nn(src)
         tgt_embedding = self.emb_nn(tgt)
-
-        # ★ 修正点 1: (B, C, L) -> (B, L, C) に permute する
-        src_embedding = src_embedding.permute(0, 2, 1).contiguous() # (B, 1024, 512)
-        tgt_embedding = tgt_embedding.permute(0, 2, 1).contiguous() # (B, 1024, 512)
 
         src_embedding_p, tgt_embedding_p = self.pointer(src_embedding, tgt_embedding)
 

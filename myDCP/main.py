@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+
 from __future__ import print_function
 import os
 import gc
@@ -17,12 +18,15 @@ import numpy as np
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
-from torch.utils.data import random_split # ★ 変更点: random_split をインポート
+from torch.utils.data import random_split 
 
-# ★ 変更点: DCPDataset を test.py からインポート
+
+# Part of the code is referred from: https://github.com/floodsung/LearningToCompare_FSL
+
+
 try:
-    # test.py というファイル名からインポート
-    from test import DCPDataset
+    # makedataset.py というファイル名からインポート
+    from make_dataset import DCPDataset
 except ImportError:
     print("="*50)
     print("エラー: 'test.py' から 'DCPDataset' をインポートできません。")
@@ -30,7 +34,6 @@ except ImportError:
     print("データセット生成スクリプト（test.py または make_dataset.py）を置いてください。")
     print("="*50)
     exit(1)
-
 
 class IOStream:
     def __init__(self, path):
@@ -54,8 +57,7 @@ def _init_(args):
         os.makedirs('checkpoints/' + args.exp_name + '/' + 'models')
     os.system('cp main.py checkpoints' + '/' + args.exp_name + '/' + 'main.py.backup')
     os.system('cp model.py checkpoints' + '/' + args.exp_name + '/' + 'model.py.backup')
-    # os.system('cp data.py checkpoints' + '/' + args.exp_name + '/' + 'data.py.backup')
-    os.system('cp test.py checkpoints' + '/' + args.exp_name + '/' + 'test.py.backup') # データセットスクリプトをコピー
+    #os.system('cp data.py checkpoints' + '/' + args.exp_name + '/' + 'data.py.backup')
 
 
 def test_one_epoch(args, net, test_loader):
@@ -85,11 +87,9 @@ def test_one_epoch(args, net, test_loader):
         src = src.cuda()
         target = target.cuda()
         rotation_ab = rotation_ab.cuda()
-        # ★ 変更点: テンソルの形状を (B, 1, 3) -> (B, 3) に修正 (test.py側の修正を反映)
-        translation_ab = translation_ab.cuda().view(-1, 3)
+        translation_ab = translation_ab.cuda()
         rotation_ba = rotation_ba.cuda()
-        # ★ 変更点: テンソルの形状を (B, 1, 3) -> (B, 3) に修正 (test.py側の修正を反映)
-        translation_ba = translation_ba.cuda().view(-1, 3)
+        translation_ba = translation_ba.cuda()
 
         batch_size = src.size(0)
         num_examples += batch_size
@@ -114,15 +114,8 @@ def test_one_epoch(args, net, test_loader):
 
         ###########################
         identity = torch.eye(3).cuda().unsqueeze(0).repeat(batch_size, 1, 1)
-        
-        # translation_ab_pred は (B, 3), translation_ab も (B, 3) になったので損失計算が正しく動く
-        """loss = F.mse_loss(torch.matmul(rotation_ab_pred.transpose(2, 1), rotation_ab), identity) \
-               + F.mse_loss(translation_ab_pred, translation_ab)"""
-        
-        rot_loss = F.mse_loss(torch.matmul(rotation_ab_pred.transpose(2, 1), rotation_ab), identity)
-        trans_loss = F.mse_loss(translation_ab_pred, translation_ab)
-        loss = (rot_loss * 100) + trans_loss  # 回転の重みを100倍に
-
+        loss = F.mse_loss(torch.matmul(rotation_ab_pred.transpose(2, 1), rotation_ab), identity) \
+               + F.mse_loss(translation_ab_pred, translation_ab)
         if args.cycle:
             rotation_loss = F.mse_loss(torch.matmul(rotation_ba_pred, rotation_ab_pred), identity.clone())
             translation_loss = torch.mean((torch.matmul(rotation_ba_pred.transpose(2, 1),
@@ -191,11 +184,9 @@ def train_one_epoch(args, net, train_loader, opt):
         src = src.cuda()
         target = target.cuda()
         rotation_ab = rotation_ab.cuda()
-        # ★ 変更点: テンソルの形状を (B, 1, 3) -> (B, 3) に修正 (test.py側の修正を反映)
-        translation_ab = translation_ab.cuda().view(-1, 3)
+        translation_ab = translation_ab.cuda()
         rotation_ba = rotation_ba.cuda()
-        # ★ 変更点: テンソルの形状を (B, 1, 3) -> (B, 3) に修正 (test.py側の修正を反映)
-        translation_ba = translation_ba.cuda().view(-1, 3)
+        translation_ba = translation_ba.cuda()
 
         batch_size = src.size(0)
         opt.zero_grad()
@@ -220,14 +211,8 @@ def train_one_epoch(args, net, train_loader, opt):
         transformed_target = transform_point_cloud(target, rotation_ba_pred, translation_ba_pred)
         ###########################
         identity = torch.eye(3).cuda().unsqueeze(0).repeat(batch_size, 1, 1)
-        
-        # translation_ab_pred は (B, 3), translation_ab も (B, 3) になったので損失計算が正しく動く
-        """loss = F.mse_loss(torch.matmul(rotation_ab_pred.transpose(2, 1), rotation_ab), identity) \
-               + F.mse_loss(translation_ab_pred, translation_ab)"""
-        
-        rot_loss = F.mse_loss(torch.matmul(rotation_ab_pred.transpose(2, 1), rotation_ab), identity)
-        trans_loss = F.mse_loss(translation_ab_pred, translation_ab)
-        loss = (rot_loss * 100) + trans_loss  # 回転の重みを100倍に
+        loss = F.mse_loss(torch.matmul(rotation_ab_pred.transpose(2, 1), rotation_ab), identity) \
+               + F.mse_loss(translation_ab_pred, translation_ab)
         if args.cycle:
             rotation_loss = F.mse_loss(torch.matmul(rotation_ba_pred, rotation_ab_pred), identity.clone())
             translation_loss = torch.mean((torch.matmul(rotation_ba_pred.transpose(2, 1),
@@ -271,7 +256,7 @@ def train_one_epoch(args, net, train_loader, opt):
 
 
 def test(args, net, test_loader, boardio, textio):
-    # (この関数は train_one_epoch/test_one_epoch を呼ぶだけなので変更不要)
+
     test_loss, test_cycle_loss, \
     test_mse_ab, test_mae_ab, test_mse_ba, test_mae_ba, test_rotations_ab, test_translations_ab, \
     test_rotations_ab_pred, \
@@ -311,7 +296,6 @@ def test(args, net, test_loader, boardio, textio):
 
 
 def train(args, net, train_loader, test_loader, boardio, textio):
-    # (この関数は train_one_epoch/test_one_epoch を呼ぶだけなので変更不要)
     if args.use_sgd:
         print("Use SGD")
         opt = optim.SGD(net.parameters(), lr=args.lr * 100, momentum=args.momentum, weight_decay=1e-4)
@@ -363,7 +347,7 @@ def train(args, net, train_loader, test_loader, boardio, textio):
         train_rmse_ba = np.sqrt(train_mse_ba)
         test_rmse_ba = np.sqrt(test_mse_ba)
 
-        train_rotations_ab_pred_euler = npmat2euler(train_rotations_ab_pred, 'xyz')
+        train_rotations_ab_pred_euler = npmat2euler(train_rotations_ab_pred)
         train_r_mse_ab = np.mean((train_rotations_ab_pred_euler - np.degrees(train_eulers_ab)) ** 2)
         train_r_rmse_ab = np.sqrt(train_r_mse_ab)
         train_r_mae_ab = np.mean(np.abs(train_rotations_ab_pred_euler - np.degrees(train_eulers_ab)))
@@ -379,7 +363,7 @@ def train(args, net, train_loader, test_loader, boardio, textio):
         train_t_rmse_ba = np.sqrt(train_t_mse_ba)
         train_t_mae_ba = np.mean(np.abs(train_translations_ba - train_translations_ba_pred))
 
-        test_rotations_ab_pred_euler = npmat2euler(test_rotations_ab_pred, 'xyz')
+        test_rotations_ab_pred_euler = npmat2euler(test_rotations_ab_pred)
         test_r_mse_ab = np.mean((test_rotations_ab_pred_euler - np.degrees(test_eulers_ab)) ** 2)
         test_r_rmse_ab = np.sqrt(test_r_mse_ab)
         test_r_mae_ab = np.mean(np.abs(test_rotations_ab_pred_euler - np.degrees(test_eulers_ab)))
@@ -466,51 +450,73 @@ def train(args, net, train_loader, test_loader, boardio, textio):
                          best_test_r_mse_ba, best_test_r_rmse_ba,
                          best_test_r_mae_ba, best_test_t_mse_ba, best_test_t_rmse_ba, best_test_t_mae_ba))
 
-        # (TensorBoard への書き込みも変更不要)
-        boardio.add_scalar('train/loss', train_loss, epoch)
-        boardio.add_scalar('train/cycle_loss', train_cycle_loss, epoch)
-        boardio.add_scalar('train/A_B/mse', train_mse_ab, epoch)
-        boardio.add_scalar('train/A_B/rmse', train_rmse_ab, epoch)
-        boardio.add_scalar('train/A_B/mae', train_mae_ab, epoch)
-        boardio.add_scalar('train/A_B/r_mse', train_r_mse_ab, epoch)
-        boardio.add_scalar('train/A_B/r_rmse', train_r_rmse_ab, epoch)
-        boardio.add_scalar('train/A_B/r_mae', train_r_mae_ab, epoch)
-        boardio.add_scalar('train/A_B/t_mse', train_t_mse_ab, epoch)
-        boardio.add_scalar('train/A_B/t_rmse', train_t_rmse_ab, epoch)
-        boardio.add_scalar('train/A_B/t_mae', train_t_mae_ab, epoch)
+        boardio.add_scalar('A->B/train/loss', train_loss, epoch)
+        boardio.add_scalar('A->B/train/MSE', train_mse_ab, epoch)
+        boardio.add_scalar('A->B/train/RMSE', train_rmse_ab, epoch)
+        boardio.add_scalar('A->B/train/MAE', train_mae_ab, epoch)
+        boardio.add_scalar('A->B/train/rotation/MSE', train_r_mse_ab, epoch)
+        boardio.add_scalar('A->B/train/rotation/RMSE', train_r_rmse_ab, epoch)
+        boardio.add_scalar('A->B/train/rotation/MAE', train_r_mae_ab, epoch)
+        boardio.add_scalar('A->B/train/translation/MSE', train_t_mse_ab, epoch)
+        boardio.add_scalar('A->B/train/translation/RMSE', train_t_rmse_ab, epoch)
+        boardio.add_scalar('A->B/train/translation/MAE', train_t_mae_ab, epoch)
 
-        boardio.add_scalar('train/B_A/mse', train_mse_ba, epoch)
-        boardio.add_scalar('train/B_A/rmse', train_rmse_ba, epoch)
-        boardio.add_scalar('train/B_A/mae', train_mae_ba, epoch)
-        boardio.add_scalar('train/B_A/r_mse', train_r_mse_ba, epoch)
-        boardio.add_scalar('train/B_A/r_rmse', train_r_rmse_ba, epoch)
-        boardio.add_scalar('train/B_A/r_mae', train_r_mae_ba, epoch)
-        boardio.add_scalar('train/B_A/t_mse', train_t_mse_ba, epoch)
-        boardio.add_scalar('train/B_A/t_rmse', train_t_rmse_ba, epoch)
-        boardio.add_scalar('train/B_A/t_mae', train_t_mae_ba, epoch)
+        boardio.add_scalar('B->A/train/loss', train_loss, epoch)
+        boardio.add_scalar('B->A/train/MSE', train_mse_ba, epoch)
+        boardio.add_scalar('B->A/train/RMSE', train_rmse_ba, epoch)
+        boardio.add_scalar('B->A/train/MAE', train_mae_ba, epoch)
+        boardio.add_scalar('B->A/train/rotation/MSE', train_r_mse_ba, epoch)
+        boardio.add_scalar('B->A/train/rotation/RMSE', train_r_rmse_ba, epoch)
+        boardio.add_scalar('B->A/train/rotation/MAE', train_r_mae_ba, epoch)
+        boardio.add_scalar('B->A/train/translation/MSE', train_t_mse_ba, epoch)
+        boardio.add_scalar('B->A/train/translation/RMSE', train_t_rmse_ba, epoch)
+        boardio.add_scalar('B->A/train/translation/MAE', train_t_mae_ba, epoch)
 
+        ############TEST
+        boardio.add_scalar('A->B/test/loss', test_loss, epoch)
+        boardio.add_scalar('A->B/test/MSE', test_mse_ab, epoch)
+        boardio.add_scalar('A->B/test/RMSE', test_rmse_ab, epoch)
+        boardio.add_scalar('A->B/test/MAE', test_mae_ab, epoch)
+        boardio.add_scalar('A->B/test/rotation/MSE', test_r_mse_ab, epoch)
+        boardio.add_scalar('A->B/test/rotation/RMSE', test_r_rmse_ab, epoch)
+        boardio.add_scalar('A->B/test/rotation/MAE', test_r_mae_ab, epoch)
+        boardio.add_scalar('A->B/test/translation/MSE', test_t_mse_ab, epoch)
+        boardio.add_scalar('A->B/test/translation/RMSE', test_t_rmse_ab, epoch)
+        boardio.add_scalar('A->B/test/translation/MAE', test_t_mae_ab, epoch)
 
-        boardio.add_scalar('test/loss', test_loss, epoch)
-        boardio.add_scalar('test/cycle_loss', test_cycle_loss, epoch)
-        boardio.add_scalar('test/A_B/mse', test_mse_ab, epoch)
-        boardio.add_scalar('test/A_B/rmse', test_rmse_ab, epoch)
-        boardio.add_scalar('test/A_B/mae', test_mae_ab, epoch)
-        boardio.add_scalar('test/A_B/r_mse', test_r_mse_ab, epoch)
-        boardio.add_scalar('test/A_B/r_rmse', test_r_rmse_ab, epoch)
-        boardio.add_scalar('test/A_B/r_mae', test_r_mae_ab, epoch)
-        boardio.add_scalar('test/A_B/t_mse', test_t_mse_ab, epoch)
-        boardio.add_scalar('test/A_B/t_rmse', test_t_rmse_ab, epoch)
-        boardio.add_scalar('test/A_B/t_mae', test_t_mae_ab, epoch)
+        boardio.add_scalar('B->A/test/loss', test_loss, epoch)
+        boardio.add_scalar('B->A/test/MSE', test_mse_ba, epoch)
+        boardio.add_scalar('B->A/test/RMSE', test_rmse_ba, epoch)
+        boardio.add_scalar('B->A/test/MAE', test_mae_ba, epoch)
+        boardio.add_scalar('B->A/test/rotation/MSE', test_r_mse_ba, epoch)
+        boardio.add_scalar('B->A/test/rotation/RMSE', test_r_rmse_ba, epoch)
+        boardio.add_scalar('B->A/test/rotation/MAE', test_r_mae_ba, epoch)
+        boardio.add_scalar('B->A/test/translation/MSE', test_t_mse_ba, epoch)
+        boardio.add_scalar('B->A/test/translation/RMSE', test_t_rmse_ba, epoch)
+        boardio.add_scalar('B->A/test/translation/MAE', test_t_mae_ba, epoch)
 
-        boardio.add_scalar('test/B_A/mse', test_mse_ba, epoch)
-        boardio.add_scalar('test/B_A/rmse', test_rmse_ba, epoch)
-        boardio.add_scalar('test/B_A/mae', test_mae_ba, epoch)
-        boardio.add_scalar('test/B_A/r_mse', test_r_mse_ba, epoch)
-        boardio.add_scalar('test/B_A/r_rmse', test_r_rmse_ba, epoch)
-        boardio.add_scalar('test/B_A/r_mae', test_r_mae_ba, epoch)
-        boardio.add_scalar('test/B_A/t_mse', test_t_mse_ba, epoch)
-        boardio.add_scalar('test/B_A/t_rmse', test_t_rmse_ba, epoch)
-        boardio.add_scalar('test/B_A/t_mae', test_t_mae_ba, epoch)
+        ############BEST TEST
+        boardio.add_scalar('A->B/best_test/loss', best_test_loss, epoch)
+        boardio.add_scalar('A->B/best_test/MSE', best_test_mse_ab, epoch)
+        boardio.add_scalar('A->B/best_test/RMSE', best_test_rmse_ab, epoch)
+        boardio.add_scalar('A->B/best_test/MAE', best_test_mae_ab, epoch)
+        boardio.add_scalar('A->B/best_test/rotation/MSE', best_test_r_mse_ab, epoch)
+        boardio.add_scalar('A->B/best_test/rotation/RMSE', best_test_r_rmse_ab, epoch)
+        boardio.add_scalar('A->B/best_test/rotation/MAE', best_test_r_mae_ab, epoch)
+        boardio.add_scalar('A->B/best_test/translation/MSE', best_test_t_mse_ab, epoch)
+        boardio.add_scalar('A->B/best_test/translation/RMSE', best_test_t_rmse_ab, epoch)
+        boardio.add_scalar('A->B/best_test/translation/MAE', best_test_t_mae_ab, epoch)
+
+        boardio.add_scalar('B->A/best_test/loss', best_test_loss, epoch)
+        boardio.add_scalar('B->A/best_test/MSE', best_test_mse_ba, epoch)
+        boardio.add_scalar('B->A/best_test/RMSE', best_test_rmse_ba, epoch)
+        boardio.add_scalar('B->A/best_test/MAE', best_test_mae_ba, epoch)
+        boardio.add_scalar('B->A/best_test/rotation/MSE', best_test_r_mse_ba, epoch)
+        boardio.add_scalar('B->A/best_test/rotation/RMSE', best_test_r_rmse_ba, epoch)
+        boardio.add_scalar('B->A/best_test/rotation/MAE', best_test_r_mae_ba, epoch)
+        boardio.add_scalar('B->A/best_test/translation/MSE', best_test_t_mse_ba, epoch)
+        boardio.add_scalar('B->A/best_test/translation/RMSE', best_test_t_rmse_ba, epoch)
+        boardio.add_scalar('B->A/best_test/translation/MAE', best_test_t_mae_ba, epoch)
 
         if torch.cuda.device_count() > 1:
             torch.save(net.module.state_dict(), 'checkpoints/%s/models/model.%d.t7' % (args.exp_name, epoch))
@@ -521,8 +527,6 @@ def train(args, net, train_loader, test_loader, boardio, textio):
 
 def main():
     parser = argparse.ArgumentParser(description='Point Cloud Registration')
-    
-    # --- 元の引数を保持 ---
     parser.add_argument('--exp_name', type=str, default='exp', metavar='N',
                         help='Name of the experiment')
     parser.add_argument('--model', type=str, default='dcp', metavar='N',
@@ -547,9 +551,9 @@ def main():
                         help='Num of dimensions of fc in transformer')
     parser.add_argument('--dropout', type=float, default=0.0, metavar='N',
                         help='Dropout ratio in transformer')
-    parser.add_argument('--batch_size', type=int, default=4, metavar='batch_size',
+    parser.add_argument('--batch_size', type=int, default=8, metavar='batch_size',
                         help='Size of batch)')
-    parser.add_argument('--test_batch_size', type=int, default=5, metavar='batch_size',
+    parser.add_argument('--test_batch_size', type=int, default=4, metavar='batch_size',
                         help='Size of batch)')
     parser.add_argument('--epochs', type=int, default=250, metavar='N',
                         help='number of episode to train ')
@@ -571,20 +575,14 @@ def main():
                         help='Num of points to use')
     parser.add_argument('--model_path', type=str, default='', metavar='N',
                         help='Pretrained model path')
-
-    # ★ 変更点 3: dataset 関連の引数を削除し、新しい引数を追加
-    # parser.add_argument('--dataset', type=str, default='modelnet40', ...)
-    # parser.add_argument('--gaussian_noise', type=bool, default=False, ...)
-    # parser.add_argument('--unseen', type=bool, default=False, ...)
-    # parser.add_argument('--factor', type=float, default=4, ...)
-    
+    parser.add_argument('--use_intensity', type=bool, default=True, metavar='N',
+                        help='use intensity or not')
     parser.add_argument('--data_path', type=str, required=True,
                         help='Path to preprocessed training data directory (.pt files)')
-    parser.add_argument('--use_intensity', action='store_true', default=True,
-                        help='Use intensity channel (4 channels) instead of 3')
     parser.add_argument('--num_workers', type=int, default=4,
                         help='Num workers for dataloader')
 
+    
     args = parser.parse_args()
     torch.backends.cudnn.deterministic = True
     torch.manual_seed(args.seed)
@@ -597,24 +595,17 @@ def main():
     textio = IOStream('checkpoints/' + args.exp_name + '/run.log')
     textio.cprint(str(args))
 
-    # ★ 変更点 4: args に input_channels を追加 (model.py で利用するため)
+    #輝度値を使う場合埋め込みNNの入力を4にする
     args.input_channels = 4 if args.use_intensity else 3
-    textio.cprint(f"Using {args.input_channels} input channels.")
 
-
-    # ★ 変更点 5: データローダーの初期化をカスタムデータセットに差し替え
-    print(f"Loading all data from: {args.data_path}")
-    # 1. 共通のパスから、まず全てのデータを持つデータセットを1つだけ作成します
-    all_data_dataset = DCPDataset(args.data_path, intensity=args.use_intensity) # test.py を参考に引数を推測
-    
+    #データセットの読み込み
+    all_data_dataset = DCPDataset(args.data_path, intensity=args.use_intensity)
     total_size = len(all_data_dataset)
     if total_size == 0:
-        raise ValueError("エラー: データセットのサイズが0です。パスを確認してください。")
-
+        raise ValueError("エラー:データセットのサイズが0")
     # 2. データを分割する比率を決めます (例: 80% を訓練に、残り (20%) をテストに)
     train_size = int(total_size * 0.8) 
     test_size = total_size - train_size
-    
     if train_size == 0 or test_size == 0:
         print(f"警告: データ数が少なすぎるため ({total_size}件)、訓練とテストに分割できません。")
         print("両方に同じデータを使用します (非推奨)。")
@@ -629,12 +620,14 @@ def main():
             [train_size, test_size],
             generator=torch.Generator().manual_seed(args.seed) # args.seed を再利用
         )
+
     train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        drop_last=True,
-        num_workers=args.num_workers
+    train_dataset,
+    batch_size=args.batch_size,
+    shuffle=True,
+    drop_last=True,
+    num_workers=args.num_workers
+
     )
     test_loader = DataLoader(
         test_dataset,
@@ -644,11 +637,9 @@ def main():
         num_workers=args.num_workers
     )
     textio.cprint(f"Train data: {len(train_dataset)} pairs, Test data: {len(test_dataset)} pairs")
-    
-    
-    # --- モデル初期化 (変更不要) ---
-    # DCP(args) は args.input_channels を model.py 内で
-    # 読み取る必要があることに注意
+
+
+
     if args.model == 'dcp':
         net = DCP(args).cuda()
         if args.eval:
@@ -666,8 +657,6 @@ def main():
             print("Let's use", torch.cuda.device_count(), "GPUs!")
     else:
         raise Exception('Not implemented')
-    
-    # --- 訓練/評価の実行 (変更不要) ---
     if args.eval:
         test(args, net, test_loader, boardio, textio)
     else:

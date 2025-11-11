@@ -3,3 +3,5 @@
 *.npz
 *.png
 tmp.py
+*.pt
+*.t7
