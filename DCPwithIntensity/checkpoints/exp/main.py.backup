@@ -605,6 +605,7 @@ def main():
     # ★ 変更点 5: データローダーの初期化をカスタムデータセットに差し替え
     print(f"Loading all data from: {args.data_path}")
     # 1. 共通のパスから、まず全てのデータを持つデータセットを1つだけ作成します
+    #    (data_path と test_path は同じものを指定されていると仮定)
     all_data_dataset = DCPDataset(args.data_path, intensity=args.use_intensity) # test.py を参考に引数を推測
     
     total_size = len(all_data_dataset)

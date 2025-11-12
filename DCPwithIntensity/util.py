@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+#utils.py
 
 
 from __future__ import print_function
@@ -31,12 +30,28 @@ def quat2mat(quat):
     return rotMat
 
 
-def transform_point_cloud(point_cloud, rotation, translation):
-    if len(rotation.size()) == 2:
-        rot_mat = quat2mat(rotation)
+def transform_point_cloud(point_cloud, rot_mat, translation):
+    # point_cloud は (B, C, L) 形状 (C=3 または C=4)
+    # rot_mat は (B, 3, 3)
+    # translation は (B, 3)
+    
+    # 1. 最初の3チャンネル (XYZ) だけをスライス
+    xyz = point_cloud[:, :3, :]  # 形状: (B, 3, L)
+    
+    # 2. 3D座標 (XYZ) にのみ回転と並進を適用
+    transformed_xyz = torch.matmul(rot_mat, xyz) + translation.unsqueeze(2) # 形状: (B, 3, L)
+    
+    # 3. チャンネル数に応じて処理を分岐
+    if point_cloud.size(1) == 3:
+        # 入力が 3 チャンネルだった場合
+        return transformed_xyz
     else:
-        rot_mat = rotation
-    return torch.matmul(rot_mat, point_cloud) + translation.unsqueeze(2)
+        # 入力が 4 チャンネル (XYZI) だった場合
+        # 4チャンネル目 (Intensity) を取得
+        intensity = point_cloud[:, 3:, :] # 形状: (B, 1, L)
+        
+        # 4. 変換後のXYZ と、元のIntensity を連結(cat)して (B, 4, L) に戻す
+        return torch.cat((transformed_xyz, intensity), dim=1)
 
 
 def npmat2euler(mats, seq='zyx'):
