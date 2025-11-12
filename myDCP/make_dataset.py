@@ -25,30 +25,30 @@ def get_pcd_around_centroid(pcd, overlap_num):
     indices = np.argsort(distance)[:overlap_num:]
     return indices
 
-def random_rotation(pcd, rotation_range=(-30, 30)):
+def random_rotation(pcd, rotation_range=(-np.pi/6, np.pi/6)):
     # (この関数は変更ありません)
     #ランダムな回転行列の生成
     angle_x = np.random.uniform(*rotation_range)
     angle_y = np.random.uniform(*rotation_range)
     angle_z = np.random.uniform(*rotation_range)
 
-    sinx = np.sin(np.deg2rad(angle_x))
-    cosx = np.cos(np.deg2rad(angle_x))
-    siny = np.sin(np.deg2rad(angle_y))
-    cosy = np.cos(np.deg2rad(angle_y))
-    sinz = np.sin(np.deg2rad(angle_z))
-    cosz = np.cos(np.deg2rad(angle_z))
+    sinx = np.sin(angle_x)
+    cosx = np.cos(angle_x)
+    siny = np.sin(angle_y)
+    cosy = np.cos(angle_y)
+    sinz = np.sin(angle_z)
+    cosz = np.cos(angle_z)
 
     #各軸の回転行列
-    rotation_x = np.array([[1, 0, 0],
+    rotation_x = np.array([[1, 0,    0],
                            [0, cosx, -sinx],
                            [0, sinx, cosx]])
     rotation_y = np.array([[cosy, 0, siny],
-                           [0, 1, 0],
+                           [0,    1, 0],
                            [-siny, 0, cosy]])
     rotation_z = np.array([[cosz, -sinz, 0],
-                           [sinz, cosz, 0],
-                           [0, 0, 1]])
+                           [sinz, cosz,  0],
+                           [0,    0,     1]])
     rotation_matrix = rotation_x.dot(rotation_y).dot(rotation_z)
 
     pcd_rotated = pcd.copy()
@@ -56,6 +56,7 @@ def random_rotation(pcd, rotation_range=(-30, 30)):
     #点群が輝度値を持たないときはそのまま変換する
     euler = np.asarray([angle_z, angle_y, angle_x])
     rotation_st = Rotation.from_euler('zyx', [angle_z, angle_y, angle_x])
+
     if(pcd.shape[1] != 3):
         pcd_rotated[:,:3] = rotation_st.apply(pcd[:,:3])
         return pcd, pcd_rotated, rotation_matrix, euler
@@ -75,7 +76,7 @@ def random_transform(pcd, translation_range = (-1, 1)):
 
 
 #点群を可視化する関数
-def visualize_pcd(pcd_list):
+def visualize_pcd(pcd_list, window_name = "Point Cloud"):
     # (変更ありません)
     pcd_o3d_list = []
     for pcd in pcd_list:
@@ -85,7 +86,7 @@ def visualize_pcd(pcd_list):
         rgb = [random.uniform(0,1) for i in range(3)]
         pcd_obj.paint_uniform_color(rgb)
         pcd_o3d_list.append(pcd_obj)
-    o3d.visualization.draw_geometries(pcd_o3d_list, window_name="Point Cloud")
+    o3d.visualization.draw_geometries(pcd_o3d_list, window_name=window_name)
 
 
 def visualize_pcd_overlap(pcd1,pcd2,overlap_pcd):
@@ -242,21 +243,23 @@ def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, inten
             continue
             
         ds_pcd = downsample_pcd(pcd, sample_point)
-        
+        #サンプリングした点群の座標のスケーリング
+        ds_pcd[:, :3] = ds_pcd[:, :3] / 100
         for i in range(8): # 1ファイルあたり8ペア生成
             # 1. (N, D) 形式でパッチをサンプリング
             src_pcd, tgt_pcd = sample_knn_patches_with_overlap(
                 ds_pcd, num_points_k=k, overlap_ratio_range=overlap_ratio
             )
-            
-            # ★ 変更点 2: 両方のパッチを正規化 (センタリング) ★
-            centroid_src = calculate_centroid(src_pcd)
-            centroid_tgt = calculate_centroid(tgt_pcd)
-            
+            """
+            srcとtgtの点群は同一でないため変換前に正規化するとおかしくなるよ~
+            正規化が並進なのでおかしくならない気もする
+            centroid_src = calculate_centroid(src_pcd[:, :3])
+            centroid_tgt = calculate_centroid(src_pcd[:, :3])
             src_pcd[:, :3] = src_pcd[:, :3] - centroid_src
             tgt_pcd[:, :3] = tgt_pcd[:, :3] - centroid_tgt
-            
-            # 3. 正規化された tgt_pcd にランダム変換を適用
+            """
+
+            # 3. tgtにランダムな変換をする
             #    rigit_transform は (N, D) を受け取り (N, D) を返す
             _, transformed_tgt, R_st, translation_st, \
             R_ts, translation_ts, euler_st, euler_ts = rigit_transform(tgt_pcd)
@@ -264,7 +267,6 @@ def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, inten
             #permutation
             src_pcd = np.random.permutation(src_pcd)
             transformed_tgt = np.random.permutation(transformed_tgt)
-            
             # 4. (N, D) -> (C, L) 形式 (D, N) に転置して保存
             #    (D=4, N=1024)
             src_pcd = src_pcd.T
@@ -296,12 +298,14 @@ def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, inten
 def test_function(pcd):
     # (変更ありません)
     pcd, pcd_translated, t = random_transform(pcd)
-    pcd, pcd_rotated, rotation_matrix = random_rotation(pcd)
+    pcd, pcd_rotated, rotation_matrix ,_ = random_rotation(pcd)
     print('translation', t)
     print('rotation', rotation_matrix)
 
     visualize_pcd([pcd,pcd_translated])
     visualize_pcd([pcd, pcd_rotated])
+    pcd_registered = rotation_matrix.dot(pcd[:,:3]) - t
+    visualize_pcd([pcd_registered, pcd_rotated])
 
 
 def rigit_transform(pcd):
@@ -369,3 +373,9 @@ def main():
         print("トレースバック:")
         import traceback
         traceback.print_exc()
+
+
+
+
+if __name__ == '__main__':
+    main()

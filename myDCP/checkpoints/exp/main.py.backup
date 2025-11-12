@@ -49,15 +49,25 @@ class IOStream:
 
 
 def _init_(args):
-    if not os.path.exists('checkpoints'):
-        os.makedirs('checkpoints')
-    if not os.path.exists('checkpoints/' + args.exp_name):
-        os.makedirs('checkpoints/' + args.exp_name)
-    if not os.path.exists('checkpoints/' + args.exp_name + '/' + 'models'):
-        os.makedirs('checkpoints/' + args.exp_name + '/' + 'models')
+    if args.use_intensity:
+        intensity = "with_intensity"
+    if not os.path.exists('checkpoints_with_intensity'):
+        os.makedirs('checkpoints_with_intensity')
+    if not os.path.exists('checkpoints_with_intensity/' + args.exp_name):
+        os.makedirs('checkpoints_with_intensity' + args.exp_name)
+    if not os.path.exists('checkpoints_with_intensity/' + args.exp_name + '/' + 'models'):
+        os.makedirs('checkpoints_with_intensity/' + args.exp_name + '/' + 'models')
+    else:
+        intensity = "without_intensity"
+        if not os.path.exists('checkpoints_without_intensity'):
+            os.makedirs('checkpoints_without_intensity')
+        if not os.path.exists('checkpoints_without_intensity/' + args.exp_name):
+            os.makedirs('checkpoints_without_intensity' + args.exp_name)
+        if not os.path.exists('checkpoints_without_intensity/' + args.exp_name + '/' + 'models'):
+            os.makedirs('checkpoints_without_intensity/' + args.exp_name + '/' + 'models')
     os.system('cp main.py checkpoints' + '/' + args.exp_name + '/' + 'main.py.backup')
     os.system('cp model.py checkpoints' + '/' + args.exp_name + '/' + 'model.py.backup')
-    os.system('cp data.py checkpoints' + '/' + args.exp_name + '/' + 'data.py.backup')
+    #os.system('cp data.py checkpoints' + '/' + args.exp_name + '/' + 'data.py.backup')
 
 
 def test_one_epoch(args, net, test_loader):
@@ -84,12 +94,12 @@ def test_one_epoch(args, net, test_loader):
     eulers_ba = []
 
     for src, target, rotation_ab, translation_ab, rotation_ba, translation_ba, euler_ab, euler_ba in tqdm(test_loader):
-        src = src.cuda()
+        src = src.cuda() 
         target = target.cuda()
         rotation_ab = rotation_ab.cuda()
-        translation_ab = translation_ab.cuda()
+        translation_ab = translation_ab.cuda().view(-1, 3)
         rotation_ba = rotation_ba.cuda()
-        translation_ba = translation_ba.cuda()
+        translation_ba = translation_ba.cuda().view(-1, 3)
 
         batch_size = src.size(0)
         num_examples += batch_size
@@ -181,17 +191,18 @@ def train_one_epoch(args, net, train_loader, opt):
     eulers_ba = []
 
     for src, target, rotation_ab, translation_ab, rotation_ba, translation_ba, euler_ab, euler_ba in tqdm(train_loader):
-        src = src.cuda()
-        target = target.cuda()
+        src = src.cuda() 
+        target = target.cuda() 
         rotation_ab = rotation_ab.cuda()
-        translation_ab = translation_ab.cuda()
+        translation_ab = translation_ab.cuda().view(-1, 3)
         rotation_ba = rotation_ba.cuda()
-        translation_ba = translation_ba.cuda()
+        translation_ba = translation_ba.cuda().view(-1, 3)
 
         batch_size = src.size(0)
         opt.zero_grad()
         num_examples += batch_size
         rotation_ab_pred, translation_ab_pred, rotation_ba_pred, translation_ba_pred = net(src, target)
+        
 
         ## save rotation and translation
         rotations_ab.append(rotation_ab.detach().cpu().numpy())
@@ -555,7 +566,7 @@ def main():
                         help='Size of batch)')
     parser.add_argument('--test_batch_size', type=int, default=4, metavar='batch_size',
                         help='Size of batch)')
-    parser.add_argument('--epochs', type=int, default=250, metavar='N',
+    parser.add_argument('--epochs', type=int, default=50, metavar='N',
                         help='number of episode to train ')
     parser.add_argument('--use_sgd', action='store_true', default=False,
                         help='Use SGD')

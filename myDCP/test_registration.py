@@ -21,34 +21,23 @@ from torch.utils.data import random_split
 
 
 #点群を可視化する関数
-def visualize_pcd(pcd_list):
-    pcd_o3d_list = []
+def visualize_pcd(pcd_src, pcd_tgt):
     
     # ★ 修正: テンソルがGPUにある場合 .cpu() が必要
     device = torch.device("cpu")
-    
-    for pcd_tensor in pcd_list:
+    pcd_src_np = pcd_src.squeeze(0).cpu().detach().numpy().T
+    pcd_src_np_xyz = pcd_src_np[:,:3]
+    pcd_src_o3d = o3d.geometry.PointCloud()
+    pcd_src_o3d.points = o3d.utility.Vector3dVector(pcd_src_np_xyz)
+    pcd_src_o3d.paint_uniform_color([1,0,0])
+
+    pcd_tgt_np = pcd_tgt.squeeze(0).cpu().detach().numpy().T
+    pcd_tgt_np_xyz = pcd_tgt_np[:,:3]
+    pcd_tgt_o3d = o3d.geometry.PointCloud()
+    pcd_tgt_o3d.points = o3d.utility.Vector3dVector(pcd_tgt_np_xyz)
+    pcd_tgt_o3d.paint_uniform_color([0,0,1])
         
-        # (B, C, L) or (C, L) のテンソルを (L, C) の numpy 配列に変換
-        if pcd_tensor.dim() == 3:
-            # ★ 修正点: .numpy() の前に .detach() を追加
-            pointcloud_np = pcd_tensor.squeeze(0).cpu().detach().numpy().T
-        else:
-            # ★ 修正点: .numpy() の前に .detach() を追加
-            pointcloud_np = pcd_tensor.cpu().detach().numpy().T
-            
-        # (L, 3) の XYZ 座標を取得
-        pointcloud_xyz = pointcloud_np[:, :3]
-        
-        pcd_obj = o3d.geometry.PointCloud()
-        pcd_obj.points = o3d.utility.Vector3dVector(pointcloud_xyz)
-        
-        # 色をランダムに設定
-        rgb = [random.uniform(0,1) for i in range(3)]
-        pcd_obj.paint_uniform_color(rgb)
-        pcd_o3d_list.append(pcd_obj)
-        
-    o3d.visualization.draw_geometries(pcd_o3d_list, window_name="Point Cloud Visualization")
+    o3d.visualization.draw_geometries([pcd_src_o3d, pcd_tgt_o3d], window_name="Point Cloud Visualization")
 
 
 class DCPDataset(Dataset):
@@ -154,7 +143,7 @@ def main():
     net = DCP(args).to(device)
     
     if args.model_path == '':
-        model_path = f'checkpoints/{args.exp_name}/models/model.176.t7'
+        model_path = f'checkpoints/{args.exp_name}/models/model.best.t7'
     else:
         model_path = args.model_path
 
@@ -179,6 +168,7 @@ def main():
         test_data_index = random.randint(0, len(dataset) - 1)
         print(f"\n[{i+1}/{args.num_vis}] visualizing pair {test_data_index}...")
         
+        #test_data = dataset[i]
         test_data = dataset[test_data_index]
         net.eval()
         
@@ -188,12 +178,16 @@ def main():
         src = src.unsqueeze(0).to(device)
         tgt = tgt.unsqueeze(0).to(device)
 
+        #R_gtとt_gtをGPUに送りバッチ次元を追加する
+        R_gt = R_gt.unsqueeze(0).to(device)
+        t_gt = t_gt.T.unsqueeze(0).to(device)
+        
         # モデルで変換を予測
         rotation_ab_pred, translation_ab_pred, _, _ = net(src, tgt)
 
         # 1. 元の点群 (src と tgt) を表示
         print("表示 1/2: 元の点群 (src=ランダム色, tgt=ランダム色)")
-        visualize_pcd([src, tgt])
+        visualize_pcd(src, tgt)
         
         # ★ 修正点 2: 正しい変換ロジック (util.py と同じ)
         
@@ -210,10 +204,20 @@ def main():
             transformed_src = torch.cat((transformed_src_xyz, src_intensity), dim=1)
         else:
             transformed_src = transformed_src_xyz
+        #1.1　正しい位置合わせを行った場合の点群を表示
+        transformed_src_true = torch.matmul(R_gt, src_xyz) + t_gt
+        visualize_pcd(transformed_src_true, tgt)
 
         # 2. 位置合わせ後の点群 (transformed_src と tgt) を表示
         print("表示 2/2: 位置合わせ後の点群 (transformed_src=ランダム色, tgt=ランダム色)")
-        visualize_pcd([transformed_src, tgt])
+        visualize_pcd(transformed_src, tgt)
+
+
+        print("回転行列の真値", R_gt)
+        print("並進の真値",t_gt)
+
+        print("回転行列の予測値", rotation_ab_pred)
+        print("並進行列の予測値", translation_ab_pred)
 
 if __name__ == '__main__':
     main()
