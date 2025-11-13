@@ -154,7 +154,7 @@ def main():
     net = DCP(args).to(device)
     
     if args.model_path == '':
-        model_path = f'checkpoints/{args.exp_name}/models/model.176.t7'
+        model_path = f'checkpoints/{args.exp_name}/models/model.best.t7'
     else:
         model_path = args.model_path
 
@@ -214,6 +214,7 @@ def main():
         # 2. 位置合わせ後の点群 (transformed_src と tgt) を表示
         print("表示 2/2: 位置合わせ後の点群 (transformed_src=ランダム色, tgt=ランダム色)")
         visualize_pcd([transformed_src, tgt])
+
 
 if __name__ == '__main__':
     main()

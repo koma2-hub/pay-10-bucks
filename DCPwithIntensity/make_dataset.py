@@ -315,56 +315,56 @@ def rigit_transform(pcd):
     return pcd, pcd_rotated_tranfromed, rotation_src_to_tgt,transform_vector,\
            rotation_tgt_to_src, transform_tgt_to_src, euler_src_to_tgt, euler_tgt_to_src
 
+def main():
+    # --- メイン実行部 ---
+    # (実行パスを修正)
+    path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/raw/"
+    output_dir = "/mnt/d/SICK/pay-10-bucks/DCPwithIntensity/dataset" 
+    overlap_range = (0.3, 0.5)
 
-# --- メイン実行部 ---
-# (実行パスを修正)
-path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/raw/"
-output_dir = "/mnt/d/SICK/pay-10-bucks/DCPwithIntensity/dataset" 
-overlap_range = (0.3, 0.5)
-
-# (1) データセットの再生成
-print(f"データセットを {output_dir} に生成します...")
-make_dcpDataset(
-    sample_point=4096, 
-    k=1024, 
-    overlap_ratio=overlap_range, 
-    data_path=path,
-    output_dir=output_dir,
-    intensity=True # ★ intensity=True を渡すように修正
-)
-print("データセット生成完了。")
-
-# (2) 生成されたデータセットの読み込みテスト
-print("\n--- データセット読み込みテスト ---")
-processed_path = output_dir
-
-try:
-    train_dataset = DCPDataset(processed_path, intensity=True)
-    print(f"データセット準備完了。合計ペア数: {len(train_dataset)}")
-
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=8,
-        shuffle=True,
-        num_workers=0 # ★ main.py 以外で num_workers > 0 を使うとエラーになることがあるため 0 に変更
+    # (1) データセットの再生成
+    print(f"データセットを {output_dir} に生成します...")
+    make_dcpDataset(
+        sample_point=4096, 
+        k=1024, 
+        overlap_ratio=overlap_range, 
+        data_path=path,
+        output_dir=output_dir,
+        intensity=True # ★ intensity=True を渡すように修正
     )
-    
-    batch = next(iter(train_loader))
+    print("データセット生成完了。")
 
-    src_pcd_batch, tgt_pcd_batch, R_st_batch, t_st_batch, \
-    R_ts_batch, t_ts_batch, euler_st_batch, euler_ts_batch = batch
-    
-    print(f"\n--- 最初のバッチ ---")
-    print(f"ソース点群 (Torch Tensor) の形状: {src_pcd_batch.shape}")
-    print(f"ターゲット点群 (Torch Tensor) の形状: {tgt_pcd_batch.shape}")
-    print(f"変換行列 (Torch Tensor) の形状: {R_st_batch.shape}")
-    print(f"並進 (Torch Tensor) の形状: {t_st_batch.shape}")
-    
-    # ★ 正規化された並進ベクトルの値を確認
-    print(f"並進ベクトルのサンプル値 (t_st):\n {t_st_batch[:2]}")
+    # (2) 生成されたデータセットの読み込みテスト
+    print("\n--- データセット読み込みテスト ---")
+    processed_path = output_dir
 
-except Exception as e:
-    print(f"データセットのテスト中にエラーが発生しました: {e}")
-    print("トレースバック:")
-    import traceback
-    traceback.print_exc()
+    try:
+        train_dataset = DCPDataset(processed_path, intensity=True)
+        print(f"データセット準備完了。合計ペア数: {len(train_dataset)}")
+
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=8,
+            shuffle=True,
+            num_workers=0 # ★ main.py 以外で num_workers > 0 を使うとエラーになることがあるため 0 に変更
+        )
+        
+        batch = next(iter(train_loader))
+
+        src_pcd_batch, tgt_pcd_batch, R_st_batch, t_st_batch, \
+        R_ts_batch, t_ts_batch, euler_st_batch, euler_ts_batch = batch
+        
+        print(f"\n--- 最初のバッチ ---")
+        print(f"ソース点群 (Torch Tensor) の形状: {src_pcd_batch.shape}")
+        print(f"ターゲット点群 (Torch Tensor) の形状: {tgt_pcd_batch.shape}")
+        print(f"変換行列 (Torch Tensor) の形状: {R_st_batch.shape}")
+        print(f"並進 (Torch Tensor) の形状: {t_st_batch.shape}")
+        
+        # ★ 正規化された並進ベクトルの値を確認
+        print(f"並進ベクトルのサンプル値 (t_st):\n {t_st_batch[:2]}")
+
+    except Exception as e:
+        print(f"データセットのテスト中にエラーが発生しました: {e}")
+        print("トレースバック:")
+        import traceback
+        traceback.print_exc()
