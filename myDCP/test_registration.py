@@ -94,7 +94,7 @@ def main():
     parser.add_argument('--exp_name', type=str, default='exp', metavar='N',
                         help='Name of the experiment (default: exp)')
     parser.add_argument('--emb_nn', type=str, default='dgcnn', metavar='N',
-                        choices=['pointnet', 'dgcnn'],
+                        choices=['pointnet', 'dgcnn','dgcnnv2'],
                         help='Embedding nn to use, [pointnet, dgcnn]')
     parser.add_argument('--pointer', type=str, default='transformer', metavar='N',
                         choices=['identity', 'transformer'],
@@ -118,10 +118,10 @@ def main():
     # --- このスクリプト固有の引数 ---
     parser.add_argument('--data_path', type=str, required=True,
                         help='Path to preprocessed data directory (.pt files)')
-    parser.add_argument('--use_intensity', action='store_true', default=True,
+    parser.add_argument('--use_intensity', action='store_true', default=False,
                         help='Use intensity channel (4 channels) instead of 3')
     parser.add_argument('--model_path', type=str, default='', metavar='N',
-                        help='Pretrained model path (default: checkpoints/exp/models/model.best.t7)')
+                        help='Pretrained model path (default: checkpoints/(args.exp_name)/models/model.best.t7)')
     parser.add_argument('--num_vis', type=int, default=5,
                         help='Number of pairs to visualize')
 
@@ -164,12 +164,14 @@ def main():
     #データセットからランダムにデータを抽出し,推測される変換行列から試しに位置合わせを行う.
     print(f"--- {args.num_vis} ペアの可視化を開始します ---")
     
-    for i in range(args.num_vis):
+    index_list = [25, 32, 49]
+    for i in index_list:
         test_data_index = random.randint(0, len(dataset) - 1)
-        print(f"\n[{i+1}/{args.num_vis}] visualizing pair {test_data_index}...")
+        #print(f"\n[{i+1}/{args.num_vis}] visualizing pair {test_data_index}...")
+        print(f"\n[{i}] visualizing pair/ {len(index_list)}...")
         
-        #test_data = dataset[i]
-        test_data = dataset[test_data_index]
+        test_data = dataset[i]
+        #test_data = dataset[test_data_index]
         net.eval()
         
         src, tgt, R_gt, t_gt, _, _, _, _ = test_data
@@ -185,39 +187,47 @@ def main():
         # モデルで変換を予測
         rotation_ab_pred, translation_ab_pred, _, _ = net(src, tgt)
 
-        # 1. 元の点群 (src と tgt) を表示
+        # (B, C, L) から (B, 3, L) の XYZ 座標をスライス
+        src_xyz = src[:, :3, :].clone().detach()
+        #1.1　正しい位置合わせを行った場合の点群を計算
+        transformed_src_true = torch.matmul(R_gt, src_xyz) + t_gt
+
+        # 1. 元の点群 (src と 合わせるべきソースの点群transformed_src_true) を表示
         print("表示 1/2: 元の点群 (src=ランダム色, tgt=ランダム色)")
-        visualize_pcd(src, tgt)
+        visualize_pcd(src, transformed_src_true)
         
         # ★ 修正点 2: 正しい変換ロジック (util.py と同じ)
         
         # (B, C, L) から (B, 3, L) の XYZ 座標をスライス
-        src_xyz = src[:, :3, :] 
+        src_xyz = src[:, :3, :].clone().detach()
         
         # (B, 3, 3) と (B, 3, L) で matmul
         # (B, 3) の並進を (B, 3, 1) に unsqueeze して加算
         transformed_src_xyz = torch.matmul(rotation_ab_pred, src_xyz) + translation_ab_pred.unsqueeze(2)
-
+        print(t_gt.shape)
+        print(translation_ab_pred.shape)
         # 輝度値がある場合は、変換後のXYZに輝度値を結合
         if args.input_channels == 4:
             src_intensity = src[:, 3:, :] # (B, 1, L)
             transformed_src = torch.cat((transformed_src_xyz, src_intensity), dim=1)
         else:
             transformed_src = transformed_src_xyz
-        #1.1　正しい位置合わせを行った場合の点群を表示
-        transformed_src_true = torch.matmul(R_gt, src_xyz) + t_gt
-        visualize_pcd(transformed_src_true, tgt)
 
-        # 2. 位置合わせ後の点群 (transformed_src と tgt) を表示
-        print("表示 2/2: 位置合わせ後の点群 (transformed_src=ランダム色, tgt=ランダム色)")
-        visualize_pcd(transformed_src, tgt)
+
+
+        #正しい位置合わせを行った場合の点群を計算
+        #visualize_pcd(transformed_src_true, tgt)
+
+        # 2. 位置合わせ後の点群 (transformed_src と transformed_src_true) を表示
+        print("表示 2/2: 位置合わせ後の点群 (transformed_src=赤, srcの真の点群=青)")
+        visualize_pcd(transformed_src, transformed_src_true)
 
 
         print("回転行列の真値", R_gt)
         print("並進の真値",t_gt)
 
         print("回転行列の予測値", rotation_ab_pred)
-        print("並進行列の予測値", translation_ab_pred)
+        print("並進行列の予測値", translation_ab_pred.unsqueeze(2))
 
 if __name__ == '__main__':
     main()

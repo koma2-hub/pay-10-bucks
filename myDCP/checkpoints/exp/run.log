@@ -6183,3 +6183,19 @@ A--------->B
 EPOCH:: 3, Loss: 88.152597, Cycle Loss: 18.512605, MSE: 180.859185, RMSE: 13.448390, MAE: 6.092002, rot_MSE: 270.411652, rot_RMSE: 16.444199, rot_MAE: 12.812346, trans_MSE: 69.588760, trans_RMSE: 8.341988, trans_MAE: 4.549016
 B--------->A
 EPOCH:: 3, Loss: 88.152597, MSE: 143.022909, RMSE: 11.959219, MAE: 5.925915, rot_MSE: 328.756622, rot_RMSE: 18.131647, rot_MAE: 13.835688, trans_MSE: 133.635483, trans_RMSE: 11.560081, trans_MAE: 6.149268
+Namespace(exp_name='exp', model='dcp', emb_nn='dgcnn', pointer='transformer', head='svd', emb_dims=512, n_blocks=1, n_heads=4, ff_dims=1024, dropout=0.0, batch_size=8, test_batch_size=4, epochs=50, use_sgd=False, lr=0.001, momentum=0.9, no_cuda=False, seed=1234, eval=True, cycle=True, num_points=1024, model_path='/mnt/d/SICK/pay-10-bucks/myDCP/checkpoints/with_intensity/models/model.best.t7', use_intensity=True, data_path='/mnt/d/SICK/pay-10-bucks/myDCP/dataset/', num_workers=4)
+Train data: 966 pairs, Test data: 242 pairs
+==FINAL TEST==
+A--------->B
+EPOCH:: -1, Loss: 53.235780, Cycle Loss: 13.076446, MSE: 178.089548, RMSE: 13.345020, MAE: 6.083153, rot_MSE: 240.179443, rot_RMSE: 15.497724, rot_MAE: 11.846290, trans_MSE: 40.113464, trans_RMSE: 6.333519, trans_MAE: 3.782546
+B--------->A
+EPOCH:: -1, Loss: 53.235780, MSE: 142.554816, RMSE: 11.939632, MAE: 5.940670, rot_MSE: 296.205536, rot_RMSE: 17.210623, rot_MAE: 13.217398, trans_MSE: 109.117188, trans_RMSE: 10.445917, trans_MAE: 5.660325
+Namespace(exp_name='exp', model='dcp', emb_nn='dgcnn', pointer='transformer', head='svd', emb_dims=512, n_blocks=1, n_heads=4, ff_dims=1024, dropout=0.0, batch_size=8, test_batch_size=4, epochs=50, use_sgd=False, lr=0.001, momentum=0.9, no_cuda=False, seed=1234, eval=True, cycle=True, num_points=1024, model_path='/mnt/d/SICK/pay-10-bucks/myDCP/checkpoints/without_intensity/models/model.best.t7', use_intensity=True, data_path='/mnt/d/SICK/pay-10-bucks/myDCP/dataset/', num_workers=4)
+Train data: 966 pairs, Test data: 242 pairs
+Namespace(exp_name='exp', model='dcp', emb_nn='dgcnn', pointer='transformer', head='svd', emb_dims=512, n_blocks=1, n_heads=4, ff_dims=1024, dropout=0.0, batch_size=8, test_batch_size=4, epochs=50, use_sgd=False, lr=0.001, momentum=0.9, no_cuda=False, seed=1234, eval=True, cycle=True, num_points=1024, model_path='/mnt/d/SICK/pay-10-bucks/myDCP/checkpoints/without_intensity/models/model.best.t7', use_intensity=True, data_path='/mnt/d/SICK/pay-10-bucks/myDCP/dataset/', num_workers=4)
+Train data: 966 pairs, Test data: 242 pairs
+==FINAL TEST==
+A--------->B
+EPOCH:: -1, Loss: 38.904848, Cycle Loss: 10.048408, MSE: 172.730678, RMSE: 13.142704, MAE: 6.002085, rot_MSE: 201.255554, rot_RMSE: 14.186457, rot_MAE: 11.015644, trans_MSE: 28.817141, trans_RMSE: 5.368160, trans_MAE: 3.443971
+B--------->A
+EPOCH:: -1, Loss: 38.904848, MSE: 141.557043, RMSE: 11.897775, MAE: 5.922367, rot_MSE: 253.077087, rot_RMSE: 15.908397, rot_MAE: 12.504008, trans_MSE: 97.480186, trans_RMSE: 9.873205, trans_MAE: 5.396526

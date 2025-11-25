@@ -595,7 +595,10 @@ def main():
 
     textio = IOStream('checkpoints/' + args.exp_name + '/run.log')
     textio.cprint(str(args))
-
+    if args.use_intensity:
+        textio.cprint("DCP model with Intensity")
+    else:
+        textio.cprint("DCP model without Intensity")
     #輝度値を使う場合埋め込みNNの入力を4にする
     args.input_channels = 4 if args.use_intensity else 3
 

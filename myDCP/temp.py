@@ -48,7 +48,7 @@ def visualize_pcd(pcd_list, window_name="PointCloud"):
 
 # --- 1. データセットの準備 ---
 # ★ ユーザーの環境に合わせたデータセットパス
-processed_path = "/mnt/d/SICK/pay-10-bucks/myDCP/dataset/"
+processed_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/myDCP/dataset/"
 
 # ★ intensity=False を指定 (Trueでも動作するが、ここでは座標のみ確認)
 dataset = DCPDataset(processed_path, intensity=False)

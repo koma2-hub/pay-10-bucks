@@ -409,9 +409,9 @@ def train(args, net, train_loader, test_loader, boardio, textio):
             best_test_t_mae_ba = test_t_mae_ba
 
             if torch.cuda.device_count() > 1:
-                torch.save(net.module.state_dict(), 'checkpoints/%s/models/model.best.t7' % args.exp_name)
+                torch.save(net.module.state_dict(), 'checkpoints/%s/models/model.best.t7' %   args.exp_name)
             else:
-                torch.save(net.state_dict(), 'checkpoints/%s/models/model.best.t7' % args.exp_name)
+                torch.save(net.state_dict(), 'checkpoints/%s/models/model.best.t7' %  args.exp_name)
 
         textio.cprint('==TRAIN==')
         textio.cprint('A--------->B')
@@ -534,7 +534,7 @@ def main():
                         choices=['dcp'],
                         help='Model to use, [dcp]')
     parser.add_argument('--emb_nn', type=str, default='dgcnn', metavar='N',
-                        choices=['pointnet', 'dgcnn'],
+                        choices=['pointnet', 'dgcnn', 'dgcnnv2'],
                         help='Embedding nn to use, [pointnet, dgcnn]')
     parser.add_argument('--pointer', type=str, default='transformer', metavar='N',
                         choices=['identity', 'transformer'],
@@ -552,7 +552,7 @@ def main():
                         help='Num of dimensions of fc in transformer')
     parser.add_argument('--dropout', type=float, default=0.0, metavar='N',
                         help='Dropout ratio in transformer')
-    parser.add_argument('--batch_size', type=int, default=8, metavar='batch_size',
+    parser.add_argument('--batch_size', type=int, default=4, metavar='batch_size',
                         help='Size of batch)')
     parser.add_argument('--test_batch_size', type=int, default=4, metavar='batch_size',
                         help='Size of batch)')
@@ -576,7 +576,7 @@ def main():
                         help='Num of points to use')
     parser.add_argument('--model_path', type=str, default='', metavar='N',
                         help='Pretrained model path')
-    parser.add_argument('--use_intensity', type=bool, default=True, metavar='N',
+    parser.add_argument('--use_intensity', type=bool, default=False, metavar='N',
                         help='use intensity or not')
     parser.add_argument('--data_path', type=str, required=True,
                         help='Path to preprocessed training data directory (.pt files)')
@@ -590,12 +590,15 @@ def main():
     torch.cuda.manual_seed_all(args.seed)
     np.random.seed(args.seed)
 
-    boardio = SummaryWriter(log_dir='checkpoints/' + args.exp_name)
+    boardio = SummaryWriter(log_dir='checkpoints/'  + args.exp_name)
     _init_(args)
 
-    textio = IOStream('checkpoints/' + args.exp_name + '/run.log')
+    textio = IOStream('checkpoints/'  +  args.exp_name + '/run.log')
     textio.cprint(str(args))
-
+    if args.use_intensity:
+        textio.cprint("DCP model with Intensity")
+    else:
+        textio.cprint("DCP model without Intensity")
     #輝度値を使う場合埋め込みNNの入力を4にする
     args.input_channels = 4 if args.use_intensity else 3
 
@@ -645,7 +648,7 @@ def main():
         net = DCP(args).cuda()
         if args.eval:
             if args.model_path == '':
-                model_path = 'checkpoints' + '/' + args.exp_name + '/models/model.best.t7'
+                model_path = 'checkpoints' + '/' + args.exp_name + '/'  + '/models/model.best.t7'
             else:
                 model_path = args.model_path
                 print(model_path)
