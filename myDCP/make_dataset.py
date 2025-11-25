@@ -25,7 +25,7 @@ def get_pcd_around_centroid(pcd, overlap_num):
     indices = np.argsort(distance)[:overlap_num:]
     return indices
 
-def random_rotation(pcd, rotation_range=(-np.pi/6, np.pi/6)):
+def random_rotation(pcd, rotation_range=(-np.pi/18, np.pi/18)):
     # (この関数は変更ありません)
     #ランダムな回転行列の生成
     angle_x = np.random.uniform(*rotation_range)
@@ -65,7 +65,7 @@ def random_rotation(pcd, rotation_range=(-np.pi/6, np.pi/6)):
         return pcd, pcd_rotated, rotation_matrix, euler
 
 
-def random_transform(pcd, translation_range = (-1, 1)):
+def random_transform(pcd, translation_range = (-10, 10)):
     translation_vector = np.array([np.random.uniform(translation_range[0], translation_range[1]),
                                    np.random.uniform(translation_range[0], translation_range[1]),
                                    np.random.uniform(translation_range[0], translation_range[1])])
@@ -231,7 +231,7 @@ def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, inten
     
     pair_counter = 0
 
-    total_pairs_to_generate = len(file_names) * 8
+    total_pairs_to_generate = len(file_names) * 10
     pbar = tqdm(total=total_pairs_to_generate, desc="Generating data pairs")
 
     for file in file_names:
@@ -245,7 +245,7 @@ def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, inten
         ds_pcd = downsample_pcd(pcd, sample_point)
         #サンプリングした点群の座標のスケーリング
         ds_pcd[:, :3] = ds_pcd[:, :3] / 100
-        for i in range(8): # 1ファイルあたり8ペア生成
+        for i in range(10): # 1ファイルあたり8ペア生成
             # 1. (N, D) 形式でパッチをサンプリング
             src_pcd, tgt_pcd = sample_knn_patches_with_overlap(
                 ds_pcd, num_points_k=k, overlap_ratio_range=overlap_ratio
@@ -323,14 +323,14 @@ def rigit_transform(pcd):
 def main():
     # --- メイン実行部 ---
     # (実行パスを修正)
-    path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/raw/"
-    output_dir = "/mnt/d/SICK/pay-10-bucks/myDCP/dataset" 
+    path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/processed/"
+    output_dir = "/mnt/d/SICK/pay-10-bucks/myDCP/datasetv4" 
     overlap_range = (0.3, 0.5)
 
     # (1) データセットの再生成
     print(f"データセットを {output_dir} に生成します...")
     make_dcpDataset(
-        sample_point=4096, 
+        sample_point=8192, 
         k=1024, 
         overlap_ratio=overlap_range, 
         data_path=path,

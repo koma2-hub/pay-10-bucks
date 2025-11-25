@@ -1,4 +1,3 @@
-#make_dataset.py
 import sys
 import os
 import numpy as np
@@ -9,7 +8,7 @@ from scipy.spatial.transform import Rotation
 from scipy.spatial import KDTree
 import open3d as o3d
 from tqdm import tqdm
-from util import load_ply, downsample_pcd,knn
+from utils import load_ply, downsample_pcd
 
 #点群を可視化する関数
 def visualize_pcd(pcd_list):
@@ -23,15 +22,18 @@ def visualize_pcd(pcd_list):
         pcd_o3d_list.append(pcd_obj)
     o3d.visualization.draw_geometries(pcd_o3d_list, window_name="Point Cloud")
 
+
+
 data_path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/processed"
 
 data_files = os.listdir(data_path)
+print(data_files)
 
-ply = load_ply(os.path.join(data_path, data_files[0]))
-ds_ply = downsample_pcd(pointcloud=ply, downsample_point=8192)
-ds_ply = ds_ply/100
-t_vec = np.array([2,2,10])
-pcd_trans = np.copy(ds_ply)
-pcd_trans[:, :3] = pcd_trans[:, :3] + t_vec
 
-visualize_pcd([ds_ply, pcd_trans])
+for file in data_files:
+    file_path = os.path.join(data_path, file)
+    ply = load_ply(file_path)
+    ply_ds = downsample_pcd(pointcloud=ply, downsample_point=4096, intensity=True)
+    print(file_path)
+    visualize_pcd([ply_ds])
+

@@ -5,3 +5,5 @@
 tmp.py
 *.pt
 *.t7
+*log
+*.backup

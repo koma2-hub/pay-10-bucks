@@ -94,7 +94,7 @@ def main():
     parser.add_argument('--exp_name', type=str, default='exp', metavar='N',
                         help='Name of the experiment (default: exp)')
     parser.add_argument('--emb_nn', type=str, default='dgcnn', metavar='N',
-                        choices=['pointnet', 'dgcnn'],
+                        choices=['pointnet', 'dgcnn','dgcnnv2'],
                         help='Embedding nn to use, [pointnet, dgcnn]')
     parser.add_argument('--pointer', type=str, default='transformer', metavar='N',
                         choices=['identity', 'transformer'],
@@ -188,7 +188,7 @@ def main():
         rotation_ab_pred, translation_ab_pred, _, _ = net(src, tgt)
 
         # (B, C, L) から (B, 3, L) の XYZ 座標をスライス
-        src_xyz = src[:, :3, :] 
+        src_xyz = src[:, :3, :].clone().detach()
         #1.1　正しい位置合わせを行った場合の点群を計算
         transformed_src_true = torch.matmul(R_gt, src_xyz) + t_gt
 
@@ -199,12 +199,13 @@ def main():
         # ★ 修正点 2: 正しい変換ロジック (util.py と同じ)
         
         # (B, C, L) から (B, 3, L) の XYZ 座標をスライス
-        src_xyz = src[:, :3, :] 
+        src_xyz = src[:, :3, :].clone().detach()
         
         # (B, 3, 3) と (B, 3, L) で matmul
         # (B, 3) の並進を (B, 3, 1) に unsqueeze して加算
         transformed_src_xyz = torch.matmul(rotation_ab_pred, src_xyz) + translation_ab_pred.unsqueeze(2)
-
+        print(t_gt.shape)
+        print(translation_ab_pred.shape)
         # 輝度値がある場合は、変換後のXYZに輝度値を結合
         if args.input_channels == 4:
             src_intensity = src[:, 3:, :] # (B, 1, L)
@@ -226,7 +227,7 @@ def main():
         print("並進の真値",t_gt)
 
         print("回転行列の予測値", rotation_ab_pred)
-        print("並進行列の予測値", translation_ab_pred)
+        print("並進行列の予測値", translation_ab_pred.unsqueeze(2))
 
 if __name__ == '__main__':
     main()

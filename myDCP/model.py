@@ -81,7 +81,7 @@ def get_graph_feature_based_on_coord(x, k=32):
 
     #semantic segmentation を行うdgcnnでは下記の特徴を使っていた
     #feature = torch.cat((feature, x), x dim=3).permute(0, 3, 1, 2)
-    feature = torch.cat((feature, x), dim=3).permute(0, 3, 1, 2)
+    feature = torch.cat((feature-x, x), dim=3).permute(0, 3, 1, 2)
 
     return feature
 
@@ -90,7 +90,7 @@ def get_graph_feature(x, k=32):
     idx = knn(x, k=k)  # (batch_size, num_points, k)
     batch_size, num_points, _ = idx.size()
     
-    device = torch.device('cpu')
+    device = torch.device('cuda')
 
     idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
@@ -108,7 +108,7 @@ def get_graph_feature(x, k=32):
 
     #semantic segmentation を行うdgcnnでは下記の特徴を使っていた
     #feature = torch.cat((feature, x), x dim=3).permute(0, 3, 1, 2)
-    feature = torch.cat((feature, x), dim=3).permute(0, 3, 1, 2)
+    feature = torch.cat((feature-x, x), dim=3).permute(0, 3, 1, 2)
 
     return feature
 
@@ -357,9 +357,12 @@ class DGCNN(nn.Module):
 #特徴を抽出するdgcnnの2つ目のバリエーション
 #semantic segmentationで用いられたものなのでいくつか変更する
 class DGCNNv2(nn.Module):
-    def __init__(self, emb_dims=512, intensity=True):
-        input_dim = 4 if intensity else 3
-        super(DGCNN, self).__init__()
+    def __init__(self, emb_dims= 512, intensity=True):
+        super(DGCNNv2, self).__init__()
+        if(intensity):
+            input_dim=4
+        else:
+            input_dim=3
         
         self.bn1 = nn.BatchNorm2d(64)
         self.bn2 = nn.BatchNorm2d(64)
@@ -382,10 +385,18 @@ class DGCNNv2(nn.Module):
         self.conv5 = nn.Sequential(nn.Conv1d(512, emb_dims, kernel_size=1, bias=False),
                                    self.bn5,
                                    nn.LeakyReLU(negative_slope=0.2))
+        
+        self.linear1 = nn.Linear(emb_dims*2, 512, bias=False)
+        self.bn6 = nn.BatchNorm1d(512)
+        self.dp1 = nn.Dropout(p=0.5)
+        self.linear2 = nn.Linear(512, 512)
+        self.bn7 = nn.BatchNorm1d(512)
+        self.dp2 = nn.Dropout(p=0.5)
+        self.linear3 = nn.Linear(512, 512)
 
     def forward(self, x):
         batch_size = x.size(0)
-        x = get_graph_feature_based_on_coord(x)
+        x = get_graph_feature(x)
         x = self.conv1(x)
         x1 = x.max(dim=-1, keepdim=False)[0]
 
@@ -395,7 +406,7 @@ class DGCNNv2(nn.Module):
 
         x = get_graph_feature(x2)
         x = self.conv3(x)
-        x3 = x.max(dim=-1, keepdim=False)[0]
+        x3 = x.max(dim=-1)[0]
 
         x = get_graph_feature(x3)
         x = self.conv4(x)
@@ -403,16 +414,7 @@ class DGCNNv2(nn.Module):
 
         x = torch.cat((x1, x2, x3, x4), dim=1)
 
-        x = self.conv5(x)
-        x1 = F.adaptive_max_pool1d(x, 1).view(batch_size, -1)
-        x2 = F.adaptive_avg_pool1d(x, 1).view(batch_size, -1)
-        x = torch.cat((x1, x2), 1)
 
-        x = F.leaky_relu(self.bn6(self.linear1(x)), negative_slope=0.2)
-        x = self.dp1(x)
-        x = F.leaky_relu(self.bn7(self.linear2(x)), negative_slope=0.2)
-        x = self.dp2(x)
-        x = self.linear3(x)
         return x
 
 
@@ -546,6 +548,8 @@ class DCP(nn.Module):
             self.emb_nn = PointNet(emb_dims=self.emb_dims)
         elif args.emb_nn == 'dgcnn':
             self.emb_nn = DGCNN(emb_dims=self.emb_dims, intensity=self.use_intensity)
+        elif args.emb_nn =='dgcnnv2':
+            self.emb_nn = DGCNNv2(emb_dims=self.emb_dims, intensity=self.use_intensity)
         else:
             raise Exception('Not implemented')
 

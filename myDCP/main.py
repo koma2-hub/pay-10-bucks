@@ -409,9 +409,9 @@ def train(args, net, train_loader, test_loader, boardio, textio):
             best_test_t_mae_ba = test_t_mae_ba
 
             if torch.cuda.device_count() > 1:
-                torch.save(net.module.state_dict(), 'checkpoints/%s/models/model.best.t7' % args.exp_name)
+                torch.save(net.module.state_dict(), 'checkpoints/%s/models/model.best.t7' %   args.exp_name)
             else:
-                torch.save(net.state_dict(), 'checkpoints/%s/models/model.best.t7' % args.exp_name)
+                torch.save(net.state_dict(), 'checkpoints/%s/models/model.best.t7' %  args.exp_name)
 
         textio.cprint('==TRAIN==')
         textio.cprint('A--------->B')
@@ -534,7 +534,7 @@ def main():
                         choices=['dcp'],
                         help='Model to use, [dcp]')
     parser.add_argument('--emb_nn', type=str, default='dgcnn', metavar='N',
-                        choices=['pointnet', 'dgcnn'],
+                        choices=['pointnet', 'dgcnn', 'dgcnnv2'],
                         help='Embedding nn to use, [pointnet, dgcnn]')
     parser.add_argument('--pointer', type=str, default='transformer', metavar='N',
                         choices=['identity', 'transformer'],
@@ -590,10 +590,10 @@ def main():
     torch.cuda.manual_seed_all(args.seed)
     np.random.seed(args.seed)
 
-    boardio = SummaryWriter(log_dir='checkpoints/' + args.exp_name)
+    boardio = SummaryWriter(log_dir='checkpoints/'  + args.exp_name)
     _init_(args)
 
-    textio = IOStream('checkpoints/' + args.exp_name + '/run.log')
+    textio = IOStream('checkpoints/'  +  args.exp_name + '/run.log')
     textio.cprint(str(args))
     if args.use_intensity:
         textio.cprint("DCP model with Intensity")
@@ -648,7 +648,7 @@ def main():
         net = DCP(args).cuda()
         if args.eval:
             if args.model_path == '':
-                model_path = 'checkpoints' + '/' + args.exp_name + '/models/model.best.t7'
+                model_path = 'checkpoints' + '/' + args.exp_name + '/'  + '/models/model.best.t7'
             else:
                 model_path = args.model_path
                 print(model_path)
