@@ -11,6 +11,16 @@ import open3d as o3d
 from tqdm import tqdm
 from util import load_ply, downsample_pcd,knn
 
+#近傍店の探索を行う
+def knn(x, k):
+    inner = -2 * torch.matmul(x.transpose(1,0).contiguous(), x)
+    xx = torch.sum(x ** 2, dim=1, keepdim=True)
+    pairwise_distance = -xx - inner - xx.transpose(1,0).contiguous()
+
+    distance, idx = pairwise_distance.topk(k=k, dim=-1)  # (batch_size, num_points, k)
+    return distance, idx
+
+
 #点群を可視化する関数
 def visualize_pcd(pcd_list):
     pcd_o3d_list = []
@@ -23,15 +33,16 @@ def visualize_pcd(pcd_list):
         pcd_o3d_list.append(pcd_obj)
     o3d.visualization.draw_geometries(pcd_o3d_list, window_name="Point Cloud")
 
-data_path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/processed"
+def random_transform(pcd, translation_range = (-5, 5)):
+    translation_vector = np.array([np.random.uniform(translation_range[0], translation_range[1]),
+                                   np.random.uniform(translation_range[0], translation_range[1]),
+                                   np.random.uniform(translation_range[0], translation_range[1])])
+    
+    pcd_translated = np.copy(pcd)
+    pcd_translated[:,:3] = pcd_translated[:,:3] + translation_vector
+    return pcd, pcd_translated, translation_vector
 
-data_files = os.listdir(data_path)
-
-ply = load_ply(os.path.join(data_path, data_files[0]))
-ds_ply = downsample_pcd(pointcloud=ply, downsample_point=8192)
-ds_ply = ds_ply/100
-t_vec = np.array([2,2,10])
-pcd_trans = np.copy(ds_ply)
-pcd_trans[:, :3] = pcd_trans[:, :3] + t_vec
-
-visualize_pcd([ds_ply, pcd_trans])
+for i in range(10):
+    trans_range = (-5, 5)
+    trans_vec = np.array([np.random.uniform(trans_range[0], trans_range[1]),np.random.uniform(trans_range[0], trans_range[1]),np.random.uniform(trans_range[0], trans_range[1])])
+    print(trans_vec)

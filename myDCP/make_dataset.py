@@ -65,7 +65,7 @@ def random_rotation(pcd, rotation_range=(-np.pi/18, np.pi/18)):
         return pcd, pcd_rotated, rotation_matrix, euler
 
 
-def random_transform(pcd, translation_range = (-10, 10)):
+def random_transform(pcd, translation_range = (-5, 5)):
     translation_vector = np.array([np.random.uniform(translation_range[0], translation_range[1]),
                                    np.random.uniform(translation_range[0], translation_range[1]),
                                    np.random.uniform(translation_range[0], translation_range[1])])
@@ -74,6 +74,13 @@ def random_transform(pcd, translation_range = (-10, 10)):
     pcd_translated[:,:3] = pcd_translated[:,:3] + translation_vector
     return pcd, pcd_translated, translation_vector
 
+def knn(x, k):
+    inner = -2 * torch.matmul(x.transpose(2, 1).contiguous(), x)
+    xx = torch.sum(x ** 2, dim=1, keepdim=True)
+    pairwise_distance = -xx - inner - xx.transpose(2, 1).contiguous()
+
+    distance, idx = pairwise_distance.topk(k=k, dim=-1)  # (batch_size, num_points, k)
+    return distance, idx
 
 #点群を可視化する関数
 def visualize_pcd(pcd_list, window_name = "Point Cloud"):
@@ -323,8 +330,8 @@ def rigit_transform(pcd):
 def main():
     # --- メイン実行部 ---
     # (実行パスを修正)
-    path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/processed/"
-    output_dir = "/mnt/d/SICK/pay-10-bucks/myDCP/datasetv4" 
+    path = "/mnt/c/Users/komatsu/SICK/pay-10-bucks/data/mylabs/processed"
+    output_dir = "/mnt/c/Users/komatsu/SICK/pay-10-bucks/myDCP/dataset_trans5" 
     overlap_range = (0.3, 0.5)
 
     # (1) データセットの再生成

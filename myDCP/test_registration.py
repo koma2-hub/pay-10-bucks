@@ -164,17 +164,19 @@ def main():
     #データセットからランダムにデータを抽出し,推測される変換行列から試しに位置合わせを行う.
     print(f"--- {args.num_vis} ペアの可視化を開始します ---")
     
-    index_list = [25, 32, 49]
-    for i in index_list:
+    index_list = []
+    visualize_pair = int(args.num_vis)
+    for i in range(visualize_pair):
         test_data_index = random.randint(0, len(dataset) - 1)
         #print(f"\n[{i+1}/{args.num_vis}] visualizing pair {test_data_index}...")
         print(f"\n[{i}] visualizing pair/ {len(index_list)}...")
         
-        test_data = dataset[i]
-        #test_data = dataset[test_data_index]
+        #test_data = dataset[i]
+        test_data = dataset[test_data_index]
         net.eval()
         
-        src, tgt, R_gt, t_gt, _, _, _, _ = test_data
+        src, tgt, R_gt, t_gt, R_ts, t_ts, _, _ = test_data
+        print(src)
 
         # ★ 修正点 1: バッチ次元 (B=1) を追加
         src = src.unsqueeze(0).to(device)
@@ -204,15 +206,13 @@ def main():
         # (B, 3, 3) と (B, 3, L) で matmul
         # (B, 3) の並進を (B, 3, 1) に unsqueeze して加算
         transformed_src_xyz = torch.matmul(rotation_ab_pred, src_xyz) + translation_ab_pred.unsqueeze(2)
-        print(t_gt.shape)
-        print(translation_ab_pred.shape)
+
         # 輝度値がある場合は、変換後のXYZに輝度値を結合
         if args.input_channels == 4:
             src_intensity = src[:, 3:, :] # (B, 1, L)
             transformed_src = torch.cat((transformed_src_xyz, src_intensity), dim=1)
         else:
             transformed_src = transformed_src_xyz
-
 
 
         #正しい位置合わせを行った場合の点群を計算
@@ -222,12 +222,14 @@ def main():
         print("表示 2/2: 位置合わせ後の点群 (transformed_src=赤, srcの真の点群=青)")
         visualize_pcd(transformed_src, transformed_src_true)
 
-
         print("回転行列の真値", R_gt)
         print("並進の真値",t_gt)
 
         print("回転行列の予測値", rotation_ab_pred)
         print("並進行列の予測値", translation_ab_pred.unsqueeze(2))
+        identity = torch.eye(3).cuda().unsqueeze(0)
+        print("Rotation MSE", F.mse_loss(torch.matmul(rotation_ab_pred.transpose(2,1), R_gt), identity))
+        print("Translation MSE", F.mse_loss(t_gt, translation_ab_pred))
 
 if __name__ == '__main__':
     main()

@@ -552,7 +552,7 @@ def main():
                         help='Num of dimensions of fc in transformer')
     parser.add_argument('--dropout', type=float, default=0.0, metavar='N',
                         help='Dropout ratio in transformer')
-    parser.add_argument('--batch_size', type=int, default=4, metavar='batch_size',
+    parser.add_argument('--batch_size', type=int, default=8, metavar='batch_size',
                         help='Size of batch)')
     parser.add_argument('--test_batch_size', type=int, default=4, metavar='batch_size',
                         help='Size of batch)')
@@ -576,7 +576,7 @@ def main():
                         help='Num of points to use')
     parser.add_argument('--model_path', type=str, default='', metavar='N',
                         help='Pretrained model path')
-    parser.add_argument('--use_intensity', type=bool, default=False, metavar='N',
+    parser.add_argument('--use_intensity',action='store_true', default=False,
                         help='use intensity or not')
     parser.add_argument('--data_path', type=str, required=True,
                         help='Path to preprocessed training data directory (.pt files)')

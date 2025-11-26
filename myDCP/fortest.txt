@@ -1,0 +1,1 @@
+ python test_registration.py --data_path /mnt/c/Users/komatsu/SICK/pay-10-bucks/myDCP/dataset --model_path /mnt/c/Users/komatsu/SICK/pay-10-bucks/myDCP/checkpoints/with_intensity/models/model.best.t7 --use_intensity --emb_nn dgcnnv2 
