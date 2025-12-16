@@ -8,7 +8,7 @@ from scipy.spatial.transform import Rotation
 from scipy.spatial import KDTree
 import open3d as o3d
 from tqdm import tqdm
-from util import load_ply, downsample_pcd,knn
+from util import load_ply, downsample_pcd
 
 
 def calculate_centroid(pcd):
