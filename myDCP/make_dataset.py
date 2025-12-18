@@ -81,6 +81,35 @@ def knn(x, k):
 
     distance, idx = pairwise_distance.topk(k=k, dim=-1)  # (batch_size, num_points, k)
     return distance, idx
+def difference(pcd, k):
+    """
+    pcd -> (N, C)
+    k -> int
+    """
+    #pcd_tensor -> (B, C, N)
+    pcd_tensor = torch.from_numpy(pcd.astype(np.float32)).clone().to("cuda")
+    pcd_tensor = pcd_tensor.unsqueeze(0)
+    pcd_tensor = pcd_tensor.transpose(2, 1)
+    dist, idx = knn(pcd_tensor[:3, 0], k = k)
+    #pcd_tensor -> (C, N) dist:(B, N, k) -> (N, k) idx:(B, N, k) -> (N, k)
+    for i in idx:
+        #中心の点
+        point = i[0]
+        #近傍点の輝度とその距離
+        intensities = pcd_tensor[3][i]
+        distances = dist[point]
+        #0除算対策
+        distances[0] = 1
+
+        #中心点と近傍点の輝度値の差をそれぞれのキョリで割ったものの総和を計算
+        alpha = torch.sum(torch.abs(intensities - intensities[0]) / torch.abs(distances))
+        #変化の割合を輝度値と置き換える
+        pcd_tensor[3][point] = alpha
+
+    pcd_numpy = pcd_tensor.to('cpu').detach().numpy().copy()
+    
+    return pcd_numpy
+
 
 #点群を可視化する関数
 def visualize_pcd(pcd_list, window_name = "Point Cloud"):
@@ -229,7 +258,7 @@ def sample_knn_patches_with_overlap(points_full,
     return points_src_patch, points_tgt_patch
 
 
-def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, intensity=True):
+def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, intensity=True, diff=False):
     
     os.makedirs(output_dir, exist_ok=True)
     
@@ -274,11 +303,18 @@ def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, inten
             #permutation
             src_pcd = np.random.permutation(src_pcd)
             transformed_tgt = np.random.permutation(transformed_tgt)
+            #difference
+            if diff:
+                src_pcd = difference(pcd = src_pcd, k = 32)
+                transformed_tgt = difference(pcd = transformed_tgt, k = 32)
+            
             # 4. (N, D) -> (C, L) 形式 (D, N) に転置して保存
             #    (D=4, N=1024)
             src_pcd = src_pcd.T
             transformed_tgt = transformed_tgt.T
-            
+            if diff:
+                src_pcd = difference(pcd = src_pcd, k = 32)
+                transformed_tgt = difference(pcd = transformed_tgt, k = 32)
             data_dict = {
                 'src_pcd': src_pcd.astype(np.float32),
                 'tgt_pcd': transformed_tgt.astype(np.float32),
@@ -330,8 +366,8 @@ def rigit_transform(pcd):
 def main():
     # --- メイン実行部 ---
     # (実行パスを修正)
-    path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/processed"
-    output_dir = "/mnt/d/SICK/pay-10-bucks/myDCP/full_overlap_dataset_rotate45" 
+    path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs/processed"
+    output_dir = "/mnt/c/Users/matsu/SICK/pay-10-bucks/myDCP/dataset_filtered" 
     overlap_range = (0.3, 0.5)
 
     # (1) データセットの再生成
