@@ -166,16 +166,13 @@ class DCPDataset(Dataset):
 
 
 def sample_knn_patches_with_overlap(points_full, 
-                                        num_points_k=1024, 
-                                        overlap_ratio_range=(0.3, 0.5), 
-                                        max_retries=20):
+                                        num_points_k=1024):
     """
     (この関数は変更ありません)
     """
     
     N, D = points_full.shape
     K = num_points_k
-    min_overlap, max_overlap = overlap_ratio_range
 
     if N < K:
         # 点が足りない場合は、両方とも同じ点群を返す（重複率100%）
@@ -187,49 +184,18 @@ def sample_knn_patches_with_overlap(points_full,
     coords_xyz = points_full[:, :3]
     tree = KDTree(coords_xyz)
 
-    # 最後に試行したインデックスを保持するため
-    indices_src = None
-    indices_tgt = None
 
-    # 2. リトライループ
-    for _ in range(max_retries):
-        # 2a. 1つ目のパッチ (tgt) をサンプリング
-        center_index_1 = np.random.randint(0, N)
-        center_point_1 = coords_xyz[center_index_1]
-        _, indices_tgt = tree.query(center_point_1, k=K)
+    center_index = np.random.randint(0, N)
+    center_point = coords_xyz[center_index]
+    _, indices_pcd = tree.query(center_point, k = K)
 
-        # 2b. 2つ目のパッチ (src) をサンプリング
-        # (1つ目のパッチの近傍から中心を選ぶ)
-        center_index_2 = np.random.choice(indices_tgt)
-        center_point_2 = coords_xyz[center_index_2]
-        _, indices_src = tree.query(center_point_2, k=K)
+    points_src_patch = points_full[indices_pcd, :]
+    points_tgt_patch = points_full[indices_pcd, :]
 
-        # 2c. 重複率を計算
-        set_tgt = set(indices_tgt)
-        set_src = set(indices_src)
-        num_intersection = len(set_tgt.intersection(set_src))
-        actual_overlap_ratio = num_intersection / K
-
-        # 2d. 重複率が指定範囲内かチェック
-        if min_overlap <= actual_overlap_ratio <= max_overlap:
-            # 成功！インデックスからデータを抽出して早期リターン
-            points_tgt_patch = points_full[indices_tgt, :]
-            points_src_patch = points_full[indices_src, :]
-            return points_src_patch, points_tgt_patch
-
-    # 3. フォールバック (max_retries 回試行しても失敗した場合)
-    if indices_src is None or indices_tgt is None:
-        indices = np.random.choice(N, K, replace=True)
-        patch = points_full[indices, :]
-        return patch, patch
-
-    points_tgt_patch = points_full[indices_tgt, :]
-    points_src_patch = points_full[indices_src, :]
-    
     return points_src_patch, points_tgt_patch
 
 
-def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, intensity=True):
+def make_dcpDataset(sample_point, k, data_path, output_dir, intensity=True):
     
     os.makedirs(output_dir, exist_ok=True)
     
@@ -255,8 +221,7 @@ def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, inten
         for i in range(10): # 1ファイルあたり8ペア生成
             # 1. (N, D) 形式でパッチをサンプリング
             src_pcd, tgt_pcd = sample_knn_patches_with_overlap(
-                ds_pcd, num_points_k=k, overlap_ratio_range=overlap_ratio
-            )
+                ds_pcd, num_points_k=k)
             """
             srcとtgtの点群は同一でないため変換前に正規化するとおかしくなるよ~
             正規化が並進なのでおかしくならない気もする
@@ -331,15 +296,13 @@ def main():
     # --- メイン実行部 ---
     # (実行パスを修正)
     path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/processed"
-    output_dir = "/mnt/d/SICK/pay-10-bucks/myDCP/full_overlap_dataset" 
-    overlap_range = (0.3, 0.5)
+    output_dir = "/mnt/d/SICK/pay-10-bucks/myDCP/fulloverlap_dataset" 
 
     # (1) データセットの再生成
     print(f"データセットを {output_dir} に生成します...")
     make_dcpDataset(
         sample_point=8192, 
         k=1024, 
-        overlap_ratio=overlap_range, 
         data_path=path,
         output_dir=output_dir,
         intensity=True # ★ intensity=True を渡すように修正

@@ -96,11 +96,11 @@ def main():
                         metavar='N', help='use gumbel_softmax to get the categorical sample')
     parser.add_argument('--dropout', type=float, default=0.0, metavar='N',
                         help='Dropout ratio in transformer')
-    parser.add_argument('--batch_size', type=int, default=8, metavar='batch_size',
+    parser.add_argument('--batch_size', type=int, default=4, metavar='batch_size',
                         help='Size of batch)')
     parser.add_argument('--test_batch_size', type=int, default=12, metavar='batch_size',
                         help='Size of batch)')
-    parser.add_argument('--epochs', type=int, default=100, metavar='N',
+    parser.add_argument('--epochs', type=int, default=40, metavar='N',
                         help='number of episode to train ')
     parser.add_argument('--use_sgd', type=bool, default=False,
                         help='Use SGD')
@@ -124,7 +124,7 @@ def main():
                         help='Wheter to test on unseen category')
     parser.add_argument('--n_points', type=int, default=1024, metavar='N',
                         help='Num of points to use')
-    parser.add_argument('--n_subsampled_points', type=int, default=256, metavar='N',
+    parser.add_argument('--n_subsampled_points', type=int, default=768, metavar='N',
                         help='Num of subsampled points to use')
     parser.add_argument('--dataset', type=str, default='PRNetDataset', choices=['PRNetdataset'], metavar='N',
                         help='dataset to use')

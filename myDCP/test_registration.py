@@ -192,11 +192,11 @@ def main():
         # (B, C, L) から (B, 3, L) の XYZ 座標をスライス
         src_xyz = src[:, :3, :].clone().detach()
         #1.1　正しい位置合わせを行った場合の点群を計算
-        transformed_src_true = torch.matmul(R_gt, src_xyz) + t_gt
+        #transformed_src_true = torch.matmul(R_gt, src_xyz) + t_gt
 
         # 1. 元の点群 (src と 合わせるべきソースの点群transformed_src_true) を表示
         print("表示 1/2: 元の点群 (src=ランダム色, tgt=ランダム色)")
-        visualize_pcd(src, transformed_src_true)
+        visualize_pcd(src, tgt)
         
         # ★ 修正点 2: 正しい変換ロジック (util.py と同じ)
         
@@ -205,7 +205,7 @@ def main():
         
         # (B, 3, 3) と (B, 3, L) で matmul
         # (B, 3) の並進を (B, 3, 1) に unsqueeze して加算
-        transformed_src_xyz = torch.matmul(rotation_ab_pred, src_xyz) + translation_ab_pred.unsqueeze(2)
+        transformed_src_xyz = torch.matmul(R_gt, src_xyz) + t_gt.unsqueeze(2)
 
         # 輝度値がある場合は、変換後のXYZに輝度値を結合
         if args.input_channels == 4:
@@ -220,7 +220,7 @@ def main():
 
         # 2. 位置合わせ後の点群 (transformed_src と transformed_src_true) を表示
         print("表示 2/2: 位置合わせ後の点群 (transformed_src=赤, srcの真の点群=青)")
-        visualize_pcd(transformed_src, transformed_src_true)
+        visualize_pcd(transformed_src, tgt)
 
         print("回転行列の真値", R_gt)
         print("並進の真値",t_gt)

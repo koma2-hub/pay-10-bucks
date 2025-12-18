@@ -1,7 +1,7 @@
 {
-  "data_path": "/mnt/d/SICK/pay-10-bucks/myDCP/datasetv4",
-  "model_path": "checkpoints/with_intensity/models/model.99.t7",
-  "exp_name": "with_intensity",
+  "data_path": "/mnt/d/SICK/pay-10-bucks/myprnet/dataset",
+  "model_path": "checkpoints/prnet_with_intensity/models/model.best.t7",
+  "exp_name": "prnet_with_intensity",
   "emb_nn": "dgcnn",
   "attention": "transformer",
   "head": "svd",

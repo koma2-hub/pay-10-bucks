@@ -165,70 +165,50 @@ class DCPDataset(Dataset):
         return src_pcd, tgt_pcd, R_st, t_st, R_ts, t_ts, euler_st, euler_ts
 
 
-def sample_knn_patches_with_overlap(points_full, 
-                                        num_points_k=1024, 
-                                        overlap_ratio_range=(0.3, 0.5), 
-                                        max_retries=20):
+def sample_knn_patches_with_overlap(points_full, num_points_src=1024, num_points_tgt=768):
     """
-    (この関数は変更ありません)
+    1. 全体からKNNで Src(1024点) を抽出
+    2. 抽出したSrcの中から、さらにKNNで Tgt(768点) を抽出
     """
-    
     N, D = points_full.shape
-    K = num_points_k
-    min_overlap, max_overlap = overlap_ratio_range
 
-    if N < K:
-        # 点が足りない場合は、両方とも同じ点群を返す（重複率100%）
-        indices = np.random.choice(N, K, replace=True)
-        patch = points_full[indices, :]
-        return patch, patch
+    # 点数が足りない場合のフォールバック
+    if N < num_points_src:
+        indices_src = np.random.choice(N, num_points_src, replace=True)
+        patch_src = points_full[indices_src, :]
+        
+        indices_sub = np.random.choice(num_points_src, num_points_tgt, replace=False)
+        patch_tgt = patch_src[indices_sub, :]
+        return patch_src, patch_tgt
 
-    # 1. 座標データと KDTree を構築 (これは1回だけでよい)
+    # --- 1. Srcパッチの抽出 (全体からKNN 1024点) ---
     coords_xyz = points_full[:, :3]
-    tree = KDTree(coords_xyz)
+    tree_full = KDTree(coords_xyz)
 
-    # 最後に試行したインデックスを保持するため
-    indices_src = None
-    indices_tgt = None
-
-    # 2. リトライループ
-    for _ in range(max_retries):
-        # 2a. 1つ目のパッチ (tgt) をサンプリング
-        center_index_1 = np.random.randint(0, N)
-        center_point_1 = coords_xyz[center_index_1]
-        _, indices_tgt = tree.query(center_point_1, k=K)
-
-        # 2b. 2つ目のパッチ (src) をサンプリング
-        # (1つ目のパッチの近傍から中心を選ぶ)
-        center_index_2 = np.random.choice(indices_tgt)
-        center_point_2 = coords_xyz[center_index_2]
-        _, indices_src = tree.query(center_point_2, k=K)
-
-        # 2c. 重複率を計算
-        set_tgt = set(indices_tgt)
-        set_src = set(indices_src)
-        num_intersection = len(set_tgt.intersection(set_src))
-        actual_overlap_ratio = num_intersection / K
-
-        # 2d. 重複率が指定範囲内かチェック
-        if min_overlap <= actual_overlap_ratio <= max_overlap:
-            # 成功！インデックスからデータを抽出して早期リターン
-            points_tgt_patch = points_full[indices_tgt, :]
-            points_src_patch = points_full[indices_src, :]
-            return points_src_patch, points_tgt_patch
-
-    # 3. フォールバック (max_retries 回試行しても失敗した場合)
-    if indices_src is None or indices_tgt is None:
-        indices = np.random.choice(N, K, replace=True)
-        patch = points_full[indices, :]
-        return patch, patch
-
-    points_tgt_patch = points_full[indices_tgt, :]
-    points_src_patch = points_full[indices_src, :]
+    center_idx_src = np.random.randint(0, N)
+    _, indices_src = tree_full.query(coords_xyz[center_idx_src], k=num_points_src)
     
-    return points_src_patch, points_tgt_patch
+    patch_src = points_full[indices_src, :] # (1024, D)
+
+    # --- 2. Tgtパッチの抽出 (Srcの中からKNN 768点) ---
+    # Srcパッチ内の座標で再度KDTreeを構築
+    coords_src_xyz = patch_src[:, :3]
+    tree_src = KDTree(coords_src_xyz)
+    
+    # Srcパッチ内の点からランダムに中心を選ぶ
+    center_idx_tgt_in_src = np.random.randint(0, num_points_src)
+    
+    # Src内でのKNNで768点を取得
+    _, indices_tgt_in_src = tree_src.query(coords_src_xyz[center_idx_tgt_in_src], k=num_points_tgt)
+    
+    patch_tgt = patch_src[indices_tgt_in_src, :] # (768, D)
+
+    return patch_src, patch_tgt
 
 
+# ==========================================
+# ★ 変更した関数: make_dcpDataset (呼び出し部分のみ修正)
+# ==========================================
 def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, intensity=True):
     
     os.makedirs(output_dir, exist_ok=True)
@@ -246,42 +226,38 @@ def make_dcpDataset(sample_point, k, overlap_ratio, data_path, output_dir, inten
         pcd = load_ply(file_path)
         
         if pcd is None: 
-            pbar.update(4) 
+            pbar.update(10) # 1ファイルあたり10ペアなのでスキップ数も合わせる
             continue
             
         ds_pcd = downsample_pcd(pcd, sample_point)
-        #サンプリングした点群の座標のスケーリング
+        # サンプリングした点群の座標のスケーリング
         ds_pcd[:, :3] = ds_pcd[:, :3] / 100
-        for i in range(10): # 1ファイルあたり8ペア生成
-            # 1. (N, D) 形式でパッチをサンプリング
+        
+        for i in range(10): # 1ファイルあたり10ペア生成
+            
+            # ★ 変更: ここで新しい引数で関数を呼び出す
+            # src=1024, tgt=768 を指定
             src_pcd, tgt_pcd = sample_knn_patches_with_overlap(
-                ds_pcd, num_points_k=k, overlap_ratio_range=overlap_ratio
+                ds_pcd, 
+                num_points_src=1024, 
+                num_points_tgt=768
             )
-            """
-            srcとtgtの点群は同一でないため変換前に正規化するとおかしくなるよ~
-            正規化が並進なのでおかしくならない気もする
-            centroid_src = calculate_centroid(src_pcd[:, :3])
-            centroid_tgt = calculate_centroid(src_pcd[:, :3])
-            src_pcd[:, :3] = src_pcd[:, :3] - centroid_src
-            tgt_pcd[:, :3] = tgt_pcd[:, :3] - centroid_tgt
-            """
 
             # 3. tgtにランダムな変換をする
-            #    rigit_transform は (N, D) を受け取り (N, D) を返す
             _, transformed_tgt, R_st, translation_st, \
             R_ts, translation_ts, euler_st, euler_ts = rigit_transform(tgt_pcd)
             
-            #permutation
+            # permutation (シャッフル)
             src_pcd = np.random.permutation(src_pcd)
             transformed_tgt = np.random.permutation(transformed_tgt)
-            # 4. (N, D) -> (C, L) 形式 (D, N) に転置して保存
-            #    (D=4, N=1024)
+            
+            # 4. (N, D) -> (D, N) に転置して保存
             src_pcd = src_pcd.T
             transformed_tgt = transformed_tgt.T
             
             data_dict = {
-                'src_pcd': src_pcd.astype(np.float32),
-                'tgt_pcd': transformed_tgt.astype(np.float32),
+                'src_pcd': src_pcd.astype(np.float32),       # (D, 1024)
+                'tgt_pcd': transformed_tgt.astype(np.float32), # (D, 768)
                 'R_st': R_st.astype(np.float32),
                 't_st': translation_st.astype(np.float32),
                 'R_ts': R_ts.astype(np.float32),
@@ -331,7 +307,7 @@ def main():
     # --- メイン実行部 ---
     # (実行パスを修正)
     path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/processed"
-    output_dir = "/mnt/d/SICK/pay-10-bucks/myDCP/full_overlap_dataset" 
+    output_dir = "/mnt/d//SICK/pay-10-bucks/myprnet/dataset" 
     overlap_range = (0.3, 0.5)
 
     # (1) データセットの再生成
