@@ -1,29 +1,17 @@
 import sys
 import os
 import numpy as np
-import random
-import torch 
+import torch
 from torch.utils.data import Dataset, DataLoader
+import random
+
 from scipy.spatial.transform import Rotation
 from scipy.spatial import KDTree
-import open3d as o3d
 from tqdm import tqdm
-from util import load_ply, downsample_pcd
+import argparse
 
+from utils import extract_near_edge_points,downsample_pcd
 
-def calculate_centroid(pcd):
-    """(N, D) の点群から重心 (D,) を計算"""
-    # 座標 (XYZ) のみで重心を計算
-    centroid = np.mean(pcd[:, :3], axis=0)
-    return centroid
-
-def get_pcd_around_centroid(pcd, overlap_num):
-    # (この関数は現在使用されていないようです)
-    centroid = calculate_centroid(pcd)
-    distance = (pcd[:,:3]-centroid)**2
-    distance = np.sum(distance, axis=1)
-    indices = np.argsort(distance)[:overlap_num:]
-    return indices
 
 def random_rotation(pcd, rotation_range=(0, np.pi/6)):
     # (この関数は変更ありません)
@@ -74,49 +62,30 @@ def random_transform(pcd, translation_range = (-5, 5)):
     pcd_translated[:,:3] = pcd_translated[:,:3] + translation_vector
     return pcd, pcd_translated, translation_vector
 
-def knn(x, k):
-    inner = -2 * torch.matmul(x.transpose(2, 1).contiguous(), x)
-    xx = torch.sum(x ** 2, dim=1, keepdim=True)
-    pairwise_distance = -xx - inner - xx.transpose(2, 1).contiguous()
 
-    distance, idx = pairwise_distance.topk(k=k, dim=-1)  # (batch_size, num_points, k)
-    return distance, idx
-
-#点群を可視化する関数
-def visualize_pcd(pcd_list, window_name = "Point Cloud"):
-    # (変更ありません)
-    pcd_o3d_list = []
-    for pcd in pcd_list:
-        pointcloud = pcd[:,:3]
-        pcd_obj = o3d.geometry.PointCloud()
-        pcd_obj.points = o3d.utility.Vector3dVector(pointcloud)
-        rgb = [random.uniform(0,1) for i in range(3)]
-        pcd_obj.paint_uniform_color(rgb)
-        pcd_o3d_list.append(pcd_obj)
-    o3d.visualization.draw_geometries(pcd_o3d_list, window_name=window_name)
+def sample_knn_patches_with_overlap(points_full, 
+                                        num_points_k=1024):
+    """
+    (この関数は変更ありません)
+    """
+    
+    N, D = points_full.shape
+    K = num_points_k
 
 
-def visualize_pcd_overlap(pcd1,pcd2,overlap_pcd):
-    # (変更ありません)
-    pointcloud1 = pcd1[:, :3]
-    pointcloud2 = pcd2[:, :3]
-    pointcloud3 = overlap_pcd[:, :3]
-    #open3dのPointCloudオブジェクトを生成
-    pcd_o3d1 = o3d.geometry.PointCloud()
-    pcd_o3d1.points = o3d.utility.Vector3dVector(pointcloud1)
-    pcd_o3d1.paint_uniform_color([1, 0, 0])
-    #open3dのPointCloudオブジェクトを生成
-    pcd_o3d2 = o3d.geometry.PointCloud()
-    pcd_o3d2.points = o3d.utility.Vector3dVector(pointcloud2)
-    pcd_o3d2.paint_uniform_color([0, 0, 1])
-    #
-    pcd_o3d3 = o3d.geometry.PointCloud()
-    pcd_o3d3.points = o3d.utility.Vector3dVector(pointcloud3)
-    pcd_o3d3.paint_uniform_color([0, 1, 0])
+    # 1. 座標データと KDTree を構築 (これは1回だけでよい)
+    coords_xyz = points_full[:, :3]
+    tree = KDTree(coords_xyz)
 
-    o3d.visualization.draw_geometries([pcd_o3d1, pcd_o3d2, pcd_o3d3],
-                                        window_name="Point Cloud")
 
+    center_index = np.random.randint(0, N)
+    center_point = coords_xyz[center_index]
+    _, indices_pcd = tree.query(center_point, k = K)
+
+    points_src_patch = points_full[indices_pcd, :]
+    points_tgt_patch = points_full[indices_pcd, :]
+
+    return points_src_patch, points_tgt_patch
 
 class DCPDataset(Dataset):
     """
@@ -163,74 +132,47 @@ class DCPDataset(Dataset):
             tgt_pcd = tgt_pcd[:3, :]
             
         return src_pcd, tgt_pcd, R_st, t_st, R_ts, t_ts, euler_st, euler_ts
-
-
-def sample_knn_patches_with_overlap(points_full, 
-                                        num_points_k=1024):
-    """
-    (この関数は変更ありません)
-    """
     
-    N, D = points_full.shape
-    K = num_points_k
-
-
-    # 1. 座標データと KDTree を構築 (これは1回だけでよい)
-    coords_xyz = points_full[:, :3]
-    tree = KDTree(coords_xyz)
-
-
-    center_index = np.random.randint(0, N)
-    center_point = coords_xyz[center_index]
-    _, indices_pcd = tree.query(center_point, k = K)
-
-    points_src_patch = points_full[indices_pcd, :]
-    points_tgt_patch = points_full[indices_pcd, :]
-
-    return points_src_patch, points_tgt_patch
-
-
-def make_dcpDataset(sample_point, k, data_path, output_dir, intensity=True):
+def rigit_transform(pcd):
+    # (この関数は random_rotation と random_transform を呼ぶだけなので変更不要)
+    pcd ,pcd_rotated, rotation_matrix, euler_zyx = random_rotation(pcd)
+    _, pcd_rotated_tranfromed , transform_vector = random_transform(pcd_rotated)
+    rotation_src_to_tgt = rotation_matrix
+    rotation_tgt_to_src = rotation_src_to_tgt.T
+    transform_tgt_to_src = -rotation_tgt_to_src.dot(transform_vector)
+    euler_src_to_tgt = euler_zyx
+    euler_tgt_to_src = -euler_zyx[::-1]
+    return pcd, pcd_rotated_tranfromed, rotation_src_to_tgt,transform_vector,\
+        rotation_tgt_to_src, transform_tgt_to_src, euler_src_to_tgt, euler_tgt_to_src
     
+
+def make_Dataset(sample_point, k, sample_num, data_path, output_dir, pixel_size, edge_threshold, dilation_iter=2,intensity=True):
     os.makedirs(output_dir, exist_ok=True)
-    
-    file_names = os.listdir(data_path)
-    print(f"対象ファイル: {file_names}")
-    
-    pair_counter = 0
 
-    total_pairs_to_generate = len(file_names) * 4
-    pbar = tqdm(total=total_pairs_to_generate, desc="Generating data pairs")
+    file_names = os.listdir(data_path)
+    print(f"対象ファイル:{file_names}")
+
+    pair_counter = 0
+    total_pair_to_generate = len(file_names) * sample_num
+    pbar = tqdm(total=total_pair_to_generate, desc="Generating data pairs")
 
     for file in file_names:
         file_path = os.path.join(data_path, file)
-        pcd = load_ply(file_path)
-        
-        if pcd is None: 
-            pbar.update(4) 
-            continue
-            
-        ds_pcd = downsample_pcd(pcd, sample_point)
-        #サンプリングした点群の座標のスケーリング
-        ds_pcd[:, :3] = ds_pcd[:, :3]/128
-        for i in range(4): # 1ファイルあたり8ペア生成
-            # 1. (N, D) 形式でパッチをサンプリング
-            src_pcd, tgt_pcd = sample_knn_patches_with_overlap(
-                ds_pcd, num_points_k=k)
-            """
-            srcとtgtの点群は同一でないため変換前に正規化するとおかしくなるよ~
-            正規化が並進なのでおかしくならない気もする
-            centroid_src = calculate_centroid(src_pcd[:, :3])
-            centroid_tgt = calculate_centroid(src_pcd[:, :3])
-            src_pcd[:, :3] = src_pcd[:, :3] - centroid_src
-            tgt_pcd[:, :3] = tgt_pcd[:, :3] - centroid_tgt
-            """
+        egde_pcd = extract_near_edge_points(file_path, pixel_size=pixel_size, edge_threshold=edge_threshold, dilation_iter=2)
 
-            # 3. tgtにランダムな変換をする
-            #    rigit_transform は (N, D) を受け取り (N, D) を返す
+        if egde_pcd is None:
+            pbar.updata(sample_num)
+            print("edge detection failed")
+            continue
+
+        ds_pcd = downsample_pcd(egde_pcd, sample_point)
+        ds_pcd[:, :3] = ds_pcd[:, :3] / 128
+        
+        for i in range(sample_num):
+            src_pcd, tgt_pcd = sample_knn_patches_with_overlap(ds_pcd, num_points_k = k)
             _, transformed_tgt, R_st, translation_st, \
             R_ts, translation_ts, euler_st, euler_ts = rigit_transform(tgt_pcd)
-            
+
             #permutation
             src_pcd = np.random.permutation(src_pcd)
             transformed_tgt = np.random.permutation(transformed_tgt)
@@ -258,55 +200,51 @@ def make_dcpDataset(sample_point, k, data_path, output_dir, intensity=True):
             
             pbar.update(1)
 
-    pbar.close()
-    print(f"完了: 合計 {pair_counter} ペアのデータを {output_dir} に書き出しました。")
 
-
-def test_function(pcd):
-    # (変更ありません)
-    pcd, pcd_translated, t = random_transform(pcd)
-    pcd, pcd_rotated, rotation_matrix ,_ = random_rotation(pcd)
-    print('translation', t)
-    print('rotation', rotation_matrix)
-
-    visualize_pcd([pcd,pcd_translated])
-    visualize_pcd([pcd, pcd_rotated])
-    pcd_registered = rotation_matrix.dot(pcd[:,:3]) - t
-    visualize_pcd([pcd_registered, pcd_rotated])
-
-
-def rigit_transform(pcd):
-    # (この関数は random_rotation と random_transform を呼ぶだけなので変更不要)
-    pcd ,pcd_rotated, rotation_matrix, euler_zyx = random_rotation(pcd)
-    _, pcd_rotated_tranfromed , transform_vector = random_transform(pcd_rotated)
-    rotation_src_to_tgt = rotation_matrix
-    rotation_tgt_to_src = rotation_src_to_tgt.T
-    transform_tgt_to_src = -rotation_tgt_to_src.dot(transform_vector)
-    euler_src_to_tgt = euler_zyx
-    euler_tgt_to_src = -euler_zyx[::-1]
-    return pcd, pcd_rotated_tranfromed, rotation_src_to_tgt,transform_vector,\
-           rotation_tgt_to_src, transform_tgt_to_src, euler_src_to_tgt, euler_tgt_to_src
+        
 
 def main():
-    # --- メイン実行部 ---
-    # (実行パスを修正)
-    path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/processed"
-    output_dir = "/mnt/d/SICK/pay-10-bucks/myDCP/fulloverlap_dataset_dcp_rotate30" 
+    parser = argparse.ArgumentParser(description='make dataset')
 
-    # (1) データセットの再生成
-    print(f"データセットを {output_dir} に生成します...")
-    make_dcpDataset(
-        sample_point=8192, 
-        k=1024, 
-        data_path=path,
-        output_dir=output_dir,
-        intensity=True # ★ intensity=True を渡すように修正
+    parser.add_argument('--data_path', default='/mnt/d/SICK/pay-10-bucks/data/mylabs/processed')
+    parser.add_argument('--output_path', default='/mnt/d/SICK/pay-10-bucks/3Dto2D/dataset')
+    parser.add_argument('--dilation_iter', type=int, default=2)
+    parser.add_argument('--sample_point', type=int, default=8192)
+    parser.add_argument('--sample_num', type=int, default=4)
+    parser.add_argument('--pixel_size', type=float)
+    parser.add_argument('--threshold', type=float)
+
+    args = parser.parse_args()
+
+    data_path = args.data_path
+    output_path = args.output_path
+    sample_point = args.sample_point
+    sample_num = args.sample_num
+    pixel_size = args.pixel_size
+    edge_threshold = args.threshold
+    dilation_iter = args.dilation_iter
+
+    p = int(pixel_size*10)
+    th = int(edge_threshold*10)
+
+    output_path = output_path +'/' + 'pixelsize' + str(p) + '_threshold' + str(th) + '_dialation'
+    
+    print(f"データセットを{output_path}に生成します...")
+    make_Dataset(
+        sample_point = sample_point,
+        k = 1024, 
+        sample_num=sample_num,
+        data_path=data_path,
+        output_dir=output_path, 
+        pixel_size=pixel_size, 
+        edge_threshold=edge_threshold, 
+        dilation_iter=dilation_iter,
+        intensity=True
     )
-    print("データセット生成完了。")
+    print("データセット生成完了.")
 
-    # (2) 生成されたデータセットの読み込みテスト
-    print("\n--- データセット読み込みテスト ---")
-    processed_path = output_dir
+    print("\n---データセット読み込みテスト---")
+    processed_path = output_path
 
     try:
         train_dataset = DCPDataset(processed_path, intensity=True)
@@ -337,10 +275,7 @@ def main():
         print(f"データセットのテスト中にエラーが発生しました: {e}")
         print("トレースバック:")
         import traceback
-        traceback.print_exc()
-
-
-
+        traceback.print_exc()   
 
 if __name__ == '__main__':
     main()
