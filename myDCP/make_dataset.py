@@ -25,7 +25,7 @@ def get_pcd_around_centroid(pcd, overlap_num):
     indices = np.argsort(distance)[:overlap_num:]
     return indices
 
-def random_rotation(pcd, rotation_range=(-np.pi/18, np.pi/18)):
+def random_rotation(pcd, rotation_range=(0, np.pi/4)):
     # (この関数は変更ありません)
     #ランダムな回転行列の生成
     angle_x = np.random.uniform(*rotation_range)
@@ -331,7 +331,7 @@ def main():
     # --- メイン実行部 ---
     # (実行パスを修正)
     path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/processed"
-    output_dir = "/mnt/d/SICK/pay-10-bucks/myDCP/full_overlap_dataset" 
+    output_dir = "/mnt/d/SICK/pay-10-bucks/myDCP/full_overlap_dataset_rotate45" 
     overlap_range = (0.3, 0.5)
 
     # (1) データセットの再生成
