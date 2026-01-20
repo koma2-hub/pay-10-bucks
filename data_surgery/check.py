@@ -24,7 +24,7 @@ def visualize_pcd(pcd_list):
 
 
 
-data_path = "/mnt/d/SICK/pay-10-bucks/data/mylabs/processed"
+data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs/processed"
 
 data_files = os.listdir(data_path)
 print(data_files)

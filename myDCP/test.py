@@ -11,14 +11,6 @@ import open3d as o3d
 from tqdm import tqdm
 from util import load_ply, downsample_pcd,knn
 
-#近傍店の探索を行う
-def knn(x, k):
-    inner = -2 * torch.matmul(x.transpose(1,0).contiguous(), x)
-    xx = torch.sum(x ** 2, dim=1, keepdim=True)
-    pairwise_distance = -xx - inner - xx.transpose(1,0).contiguous()
-
-    distance, idx = pairwise_distance.topk(k=k, dim=-1)  # (batch_size, num_points, k)
-    return distance, idx
 
 
 #点群を可視化する関数
@@ -33,16 +25,58 @@ def visualize_pcd(pcd_list):
         pcd_o3d_list.append(pcd_obj)
     o3d.visualization.draw_geometries(pcd_o3d_list, window_name="Point Cloud")
 
-def random_transform(pcd, translation_range = (-5, 5)):
-    translation_vector = np.array([np.random.uniform(translation_range[0], translation_range[1]),
-                                   np.random.uniform(translation_range[0], translation_range[1]),
-                                   np.random.uniform(translation_range[0], translation_range[1])])
-    
-    pcd_translated = np.copy(pcd)
-    pcd_translated[:,:3] = pcd_translated[:,:3] + translation_vector
-    return pcd, pcd_translated, translation_vector
+data_path = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs/processed"
 
-for i in range(10):
-    trans_range = (-5, 5)
-    trans_vec = np.array([np.random.uniform(trans_range[0], trans_range[1]),np.random.uniform(trans_range[0], trans_range[1]),np.random.uniform(trans_range[0], trans_range[1])])
-    print(trans_vec)
+data_files = os.listdir(data_path)
+
+ply = load_ply(os.path.join(data_path, data_files[5]))
+ds_ply = downsample_pcd(pointcloud=ply, downsample_point=8192)
+ds_ply[:, :3] = ds_ply[:, :3] / 100
+trans_vec = np.asarray([0, 10, 0])
+trans_ply = ds_ply.copy()
+trans_ply[:, :3] = trans_ply[:, :3] + trans_vec
+
+visualize_pcd([ds_ply, trans_ply])
+
+
+
+
+#
+def knn(x, k):
+    inner = -2 * torch.matmul(x.transpose(2, 1).contiguous(), x)
+    xx = torch.sum(x ** 2, dim=1, keepdim=True)
+    pairwise_distance = -xx - inner - xx.transpose(2, 1).contiguous()
+
+    distance, idx = pairwise_distance.topk(k=k, dim=-1)  # (batch_size, num_points, k)
+    return distance, idx
+
+def difference(pcd, k):
+    """
+    pcd -> (N, C)
+    k -> int
+    """
+    #pcd_tensor -> (B, C, N)
+    pcd_tensor = torch.from_numpy(pcd.astype(np.float32)).clone().to("cuda")
+    pcd_tensor = pcd_tensor.unsqueeze(0)
+    pcd_tensor = pcd_tensor.transpose(2, 1)
+    dist, idx = knn(pcd_tensor[:3, 0], k = k)
+    #pcd_tensor -> (C, N) dist:(B, N, k) -> (N, k) idx:(B, N, k) -> (N, k)
+    for i in idx:
+        #中心の点
+        point = i[0]
+        #近傍点の輝度とその距離
+        intensities = pcd_tensor[3][i]
+        distances = dist[point]
+        #0除算対策
+        distances[0] = 1
+
+        #中心点と近傍点の輝度値の差をそれぞれのキョリで割ったものの総和を計算
+        alpha = torch.sum(torch.abs(intensities - intensities[0]) / torch.abs(distances)) * 100
+        #変化の割合を輝度値と置き換える
+        pcd_tensor[3][point] = alpha
+    pcd_numpy = pcd_tensor.to('cpu').detach().numpy().copy()
+    return pcd_numpy
+
+
+    
+

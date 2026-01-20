@@ -90,7 +90,7 @@ def get_graph_feature(x, k=32):
     idx = knn(x, k=k)  # (batch_size, num_points, k)
     batch_size, num_points, _ = idx.size()
     
-    device = torch.device('cuda')
+    device = torch.device('cpu')
 
     idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
@@ -406,7 +406,7 @@ class DGCNNv2(nn.Module):
 
         x = get_graph_feature(x2)
         x = self.conv3(x)
-        x3 = x.max(dim=-1)[0]
+        x3 = x.max(dim=-1, keepdim=False)[0]
 
         x = get_graph_feature(x3)
         x = self.conv4(x)

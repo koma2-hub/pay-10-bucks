@@ -20,14 +20,14 @@ def remove_outlier(pcd):
             
 
 def main():
-    data_folder = "/mnt/d/SICK/pay-10-bucks/data_surgery/temp"
+    data_folder = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data_surgery/patients"
     data_files = os.listdir(data_folder)
-    save_dir = "/mnt/d/SICK/pay-10-bucks/data/mylabs/processed"
+    save_dir = "/mnt/c/Users/matsu/SICK/pay-10-bucks/data/mylabs/processed"
 
     for file in data_files:
         data_path = os.path.join(data_folder, file)
         pcd = load_ply(data_path)
-        angle_xyz = [0, 0, np.pi]
+        angle_xyz = [np.pi, 0, 0]
         rotated_pcd = rotation(pcd, angle_xyz)
         processed_pcd = remove_outlier(rotated_pcd)
         write_ply(processed_pcd, save_dir, file)
